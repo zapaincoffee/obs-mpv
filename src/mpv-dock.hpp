@@ -1,8 +1,8 @@
 #pragma once
 
-#include <QtWidgets/QDockWidget>
-#include <QtWidgets/QTableWidgetItem>
-#include <QtCore/QTimer>
+#include <QDockWidget>
+#include <QTableWidgetItem>
+#include <QTimer>
 #include <obs.h>
 
 class QComboBox;

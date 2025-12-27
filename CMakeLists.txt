@@ -58,9 +58,14 @@ endif()
 
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE src/plugin-main.cpp src/obs-mpv-source.cpp src/mpv-dock.cpp src/mpv-sub-dialog.cpp src/playlist-table-widget.cpp)
 
+if(APPLE)
+  enable_language(Swift)
+endif()
+
 if(WIN32)
-  find_path(MPV_INCLUDE_DIR mpv/client.h HINTS ${MPV_INCLUDE_DIRS} $ENV{MPV_INCLUDE_DIRS})
-  find_library(MPV_LIBRARY NAMES mpv libmpv HINTS ${MPV_LIBRARY_DIRS} $ENV{MPV_LIBRARY_DIRS})
+  set(MPV_PATH "${CMAKE_CURRENT_SOURCE_DIR}/libmpv")
+  find_path(MPV_INCLUDE_DIR mpv/client.h HINTS ${MPV_PATH}/include)
+  find_library(MPV_LIBRARY NAMES mpv libmpv HINTS ${MPV_PATH})
   target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${MPV_INCLUDE_DIR})
   target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${MPV_LIBRARY})
 else()

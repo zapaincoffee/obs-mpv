@@ -1,5 +1,5 @@
 #pragma once
-#include <QtWidgets/QDialog>
+#include <QDialog>
 #include <obs.h>
 
 class QDoubleSpinBox;

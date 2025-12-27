@@ -1,6 +1,6 @@
 #pragma once
 
-#include <QtWidgets/QTableWidget>
+#include <QTableWidget>
 
 class MpvControlDock;
 

@@ -1,7 +1,7 @@
 #include "mpv-sub-dialog.hpp"
-#include <QtWidgets/QFormLayout>
-#include <QtWidgets/QDoubleSpinBox>
-#include <QtWidgets/QLabel>
+#include <QFormLayout>
+#include <QDoubleSpinBox>
+#include <QLabel>
 
 MpvSubSettingsDialog::MpvSubSettingsDialog(QWidget *parent) : QDialog(parent) {
     setWindowTitle("Subtitle Settings");

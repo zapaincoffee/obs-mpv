@@ -2,11 +2,11 @@
 #include "mpv-dock.hpp"
 #include "obs-mpv-source.hpp"
 
-#include <QtGui/QDragEnterEvent>
-#include <QtGui/QDropEvent>
-#include <QtCore/QMimeData>
-#include <QtWidgets/QApplication>
-#include <QtGui/QDrag>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QMimeData>
+#include <QApplication>
+#include <QDrag>
 
 PlaylistTableWidget::PlaylistTableWidget(MpvControlDock *dock, QWidget *parent)
     : QTableWidget(parent), m_dock(dock)
