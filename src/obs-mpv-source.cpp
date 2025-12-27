@@ -142,13 +142,21 @@ void ObsMpvSource::obs_video_tick(void *data, float) {
 				frame.height = self->m_height;
 				frame.format = VIDEO_FORMAT_BGRA;
 				frame.timestamp = os_gettime_ns();
+
+				if (!self->m_av_sync_started) {
+					self->m_av_sync_started = true;
+					self->m_audio_start_ts = frame.timestamp;
+					self->m_total_audio_frames = 0;
+					blog(LOG_INFO, "A/V sync started at %" PRIu64, self->m_audio_start_ts);
+				}
+
 				obs_source_output_video(self->m_source, &frame);
 			}
 		}
 	}
 }
 
-ObsMpvSource::ObsMpvSource(obs_source_t *source, obs_data_t *settings) : m_source(source), m_width(0), m_height(0), m_events_available(false), m_redraw_needed(false), m_stop_audio_thread(false), m_flush_audio_buffer(false), m_current_index(-1), m_is_loading(false) {
+ObsMpvSource::ObsMpvSource(obs_source_t *source, obs_data_t *settings) : m_source(source), m_width(0), m_height(0), m_events_available(false), m_redraw_needed(false), m_stop_audio_thread(false), m_flush_audio_buffer(false), m_av_sync_started(false), m_current_index(-1), m_is_loading(false) {
 	// Setup FIFO/Pipe for audio
 	char fifo_path[256];
 	#ifdef _WIN32
@@ -277,6 +285,11 @@ void ObsMpvSource::audio_thread_func() {
 				ssize_t bytes_read = read(fd, buf.data(), chunk_size);
 				if (bytes_read > 0) {
 					#endif
+					if (!m_av_sync_started) {
+						// Discard audio until the first video frame is rendered
+						continue;
+					}
+
 					uint32_t frames = (uint32_t)(bytes_read / sizeof(float) / 2);
 
 					struct obs_source_audio audio = {};
@@ -286,7 +299,6 @@ void ObsMpvSource::audio_thread_func() {
 					audio.data[0] = buf.data();
 					audio.frames = frames;
 
-					if (m_audio_start_ts == 0) m_audio_start_ts = os_gettime_ns();
 					audio.timestamp = m_audio_start_ts + util_mul_div64(m_total_audio_frames, 1000000000ULL, m_sample_rate);
 
 					m_total_audio_frames += frames;
@@ -339,6 +351,7 @@ void ObsMpvSource::audio_thread_func() {
 					tracks_changed = true;
 					m_total_audio_frames = 0; // Reset A/V sync on new file
 					m_audio_start_ts = 0;
+					m_av_sync_started = false;
 
 					int64_t new_rate = 0;
 					if (mpv_get_property(m_mpv, "audio-params/samplerate", MPV_FORMAT_INT64, &new_rate) == 0 && new_rate > 0) {
