@@ -161,7 +161,7 @@ ObsMpvSource::ObsMpvSource(obs_source_t *source, obs_data_t *settings) : m_sourc
 	// Setup FIFO/Pipe for audio
 	char fifo_path[256];
 	#ifdef _WIN32
-	snprintf(fifo_path, sizeof(fifo_path), "\\\\.\\pipe\\obs_mpv_audio_%p", this);
+	snprintf(fifo_path, sizeof(fifo_path), "\\.\pipe\obs_mpv_audio_%p", this);
 	m_fifo_path = fifo_path;
 	// We create the pipe here, MPV will open it.
 	// In Windows, the server (us) creates the pipe.
@@ -238,9 +238,9 @@ ObsMpvSource::~ObsMpvSource() {
 void ObsMpvSource::audio_thread_func() {
 	const size_t chunk_size = 4096;
 	std::vector<uint8_t> buf(chunk_size);
-	auto throttle_start_time = std::chrono::steady_clock::now();
 
 #ifdef _WIN32
+	auto throttle_start_time = std::chrono::steady_clock::now();
 	if (m_pipe_handle == INVALID_HANDLE_VALUE) return;
 	BOOL connected = ConnectNamedPipe(m_pipe_handle, NULL) ? TRUE : (GetLastError() == ERROR_PIPE_CONNECTED);
 
@@ -273,28 +273,35 @@ void ObsMpvSource::audio_thread_func() {
 		
 		if (m_av_sync_started) {
 			std::lock_guard<std::mutex> lock(m_audio_mutex);
-			while (m_audio_queue.size() >= chunk_size) {
-				// Process in chunks
-				struct obs_source_audio audio = {};
-				audio.samples_per_sec = m_sample_rate;
-				audio.speakers = SPEAKERS_STEREO;
-				audio.format = AUDIO_FORMAT_FLOAT;
-				
-				// Extract chunk
-				std::vector<uint8_t> out_buf(m_audio_queue.begin(), m_audio_queue.begin() + chunk_size);
-				m_audio_queue.erase(m_audio_queue.begin(), m_audio_queue.begin() + chunk_size);
-				
-				uint32_t frames = (uint32_t)(chunk_size / sizeof(float) / 2);
-				audio.data[0] = out_buf.data();
-				audio.frames = frames;
-				audio.timestamp = m_audio_start_ts + util_mul_div64(m_total_audio_frames, 1000000000ULL, m_sample_rate);
+			
+			uint64_t now = os_gettime_ns();
+			if (now >= m_audio_start_ts) {
+				uint64_t elapsed_ns = now - m_audio_start_ts;
+				uint64_t target_frames = util_mul_div64(elapsed_ns, m_sample_rate, 1000000000ULL);
+				// Small buffer to prevent underruns
+			target_frames += m_sample_rate / 10; 
 
-				if (m_total_audio_frames == 0) {
-					blog(LOG_INFO, "First audio frame sent to OBS. TS: %" PRIu64, audio.timestamp);
+				while (m_audio_queue.size() >= chunk_size && m_total_audio_frames < target_frames) {
+					struct obs_source_audio audio = {};
+					audio.samples_per_sec = m_sample_rate;
+					audio.speakers = SPEAKERS_STEREO;
+					audio.format = AUDIO_FORMAT_FLOAT;
+					
+					std::vector<uint8_t> out_buf(m_audio_queue.begin(), m_audio_queue.begin() + chunk_size);
+					m_audio_queue.erase(m_audio_queue.begin(), m_audio_queue.begin() + chunk_size);
+					
+					uint32_t frames = (uint32_t)(chunk_size / sizeof(float) / 2);
+					audio.data[0] = out_buf.data();
+					audio.frames = frames;
+					audio.timestamp = m_audio_start_ts + util_mul_div64(m_total_audio_frames, 1000000000ULL, m_sample_rate);
+
+					if (m_total_audio_frames == 0) {
+						blog(LOG_INFO, "First audio frame sent to OBS. TS: %" PRIu64, audio.timestamp);
+					}
+
+					m_total_audio_frames += frames;
+					obs_source_output_audio(m_source, &audio);
 				}
-
-				m_total_audio_frames += frames;
-				obs_source_output_audio(m_source, &audio);
 			}
 		}
 	}
@@ -326,476 +333,485 @@ void ObsMpvSource::audio_thread_func() {
 
 		if (m_av_sync_started) {
 			std::lock_guard<std::mutex> lock(m_audio_mutex);
-			// Process whatever we have, or at least chunks
-			while (m_audio_queue.size() >= chunk_size) {
-				struct obs_source_audio audio = {};
-				audio.samples_per_sec = m_sample_rate;
-				audio.speakers = SPEAKERS_STEREO;
-				audio.format = AUDIO_FORMAT_FLOAT;
-				
-				std::vector<uint8_t> out_buf(m_audio_queue.begin(), m_audio_queue.begin() + chunk_size);
-				m_audio_queue.erase(m_audio_queue.begin(), m_audio_queue.begin() + chunk_size);
-				
-				uint32_t frames = (uint32_t)(chunk_size / sizeof(float) / 2);
-				audio.data[0] = out_buf.data();
-				audio.frames = frames;
-				audio.timestamp = m_audio_start_ts + util_mul_div64(m_total_audio_frames, 1000000000ULL, m_sample_rate);
+			
+			uint64_t now = os_gettime_ns();
+			if (now >= m_audio_start_ts) {
+				uint64_t elapsed_ns = now - m_audio_start_ts;
+				uint64_t target_frames = util_mul_div64(elapsed_ns, m_sample_rate, 1000000000ULL);
+				// Small buffer to prevent underruns
+			target_frames += m_sample_rate / 10; 
 
-				if (m_total_audio_frames == 0) {
-					blog(LOG_INFO, "First audio frame sent to OBS. TS: %" PRIu64, audio.timestamp);
+				while (m_audio_queue.size() >= chunk_size && m_total_audio_frames < target_frames) {
+					struct obs_source_audio audio = {};
+					audio.samples_per_sec = m_sample_rate;
+					audio.speakers = SPEAKERS_STEREO;
+					audio.format = AUDIO_FORMAT_FLOAT;
+					
+					std::vector<uint8_t> out_buf(m_audio_queue.begin(), m_audio_queue.begin() + chunk_size);
+					m_audio_queue.erase(m_audio_queue.begin(), m_audio_queue.begin() + chunk_size);
+					
+					uint32_t frames = (uint32_t)(chunk_size / sizeof(float) / 2);
+					audio.data[0] = out_buf.data();
+					audio.frames = frames;
+					audio.timestamp = m_audio_start_ts + util_mul_div64(m_total_audio_frames, 1000000000ULL, m_sample_rate);
+
+					if (m_total_audio_frames == 0) {
+						blog(LOG_INFO, "First audio frame sent to OBS. TS: %" PRIu64, audio.timestamp);
+					}
+
+					m_total_audio_frames += frames;
+					obs_source_output_audio(m_source, &audio);
 				}
-
-				m_total_audio_frames += frames;
-				obs_source_output_audio(m_source, &audio);
 			}
 		}
 	}
 	close(fd);
 #endif
 }
-			void ObsMpvSource::handle_mpv_events() {
-			bool tracks_changed = false;
-			while (m_mpv) {
-				mpv_event *event = mpv_wait_event(m_mpv, 0);
-				if (event->event_id == MPV_EVENT_NONE) break;
 
-				if (event->event_id == MPV_EVENT_LOG_MESSAGE) {
-					auto msg = static_cast<mpv_event_log_message*>(event->data);
-					int obs_level = LOG_DEBUG;
-					if (msg->log_level <= MPV_LOG_LEVEL_ERROR) obs_level = LOG_ERROR;
-					else if (msg->log_level <= MPV_LOG_LEVEL_WARN) obs_level = LOG_WARNING;
-					else if (msg->log_level <= MPV_LOG_LEVEL_INFO) obs_level = LOG_INFO;
-					blog(obs_level, "[libmpv] %s: %s", msg->prefix, msg->text);
+void ObsMpvSource::handle_mpv_events() {
+	bool tracks_changed = false;
+	while (m_mpv) {
+		mpv_event *event = mpv_wait_event(m_mpv, 0);
+		if (event->event_id == MPV_EVENT_NONE) break;
+
+		if (event->event_id == MPV_EVENT_LOG_MESSAGE) {
+			auto msg = static_cast<mpv_event_log_message*>(event->data);
+			int obs_level = LOG_DEBUG;
+			if (msg->log_level <= MPV_LOG_LEVEL_ERROR) obs_level = LOG_ERROR;
+			else if (msg->log_level <= MPV_LOG_LEVEL_WARN) obs_level = LOG_WARNING;
+			else if (msg->log_level <= MPV_LOG_LEVEL_INFO) obs_level = LOG_INFO;
+			blog(obs_level, "[libmpv] %s: %s", msg->prefix, msg->text);
+		}
+
+		if (event->event_id == MPV_EVENT_VIDEO_RECONFIG) {
+			int64_t w, h;
+			mpv_get_property(m_mpv, "width", MPV_FORMAT_INT64, &w);
+			mpv_get_property(m_mpv, "height", MPV_FORMAT_INT64, &h);
+			m_width = (uint32_t)w; m_height = (uint32_t)h;
+		} else if (event->event_id == MPV_EVENT_AUDIO_RECONFIG) {
+			int64_t new_rate = 0;
+			if (mpv_get_property(m_mpv, "audio-params/samplerate", MPV_FORMAT_INT64, &new_rate) == 0 && new_rate > 0) {
+				if (m_sample_rate != (uint32_t)new_rate) {
+					blog(LOG_INFO, "[obs-mpv] Audio sample rate changed from %u to %" PRId64, m_sample_rate, new_rate);
+					m_sample_rate = (uint32_t)new_rate;
 				}
+			}
+		}
+		if (event->event_id == MPV_EVENT_FILE_LOADED) {
+			obs_log(LOG_INFO, "MPV: File Loaded");
+			m_is_loading = false; // Loading finished
+			tracks_changed = true;
+			m_total_audio_frames = 0; // Reset A/V sync on new file
+			m_audio_start_ts = 0;
+			m_av_sync_started = false;
 
-				if (event->event_id == MPV_EVENT_VIDEO_RECONFIG) {
-					int64_t w, h;
-					mpv_get_property(m_mpv, "width", MPV_FORMAT_INT64, &w);
-					mpv_get_property(m_mpv, "height", MPV_FORMAT_INT64, &h);
-					m_width = (uint32_t)w; m_height = (uint32_t)h;
-				} else if (event->event_id == MPV_EVENT_AUDIO_RECONFIG) {
-					int64_t new_rate = 0;
-					if (mpv_get_property(m_mpv, "audio-params/samplerate", MPV_FORMAT_INT64, &new_rate) == 0 && new_rate > 0) {
-						if (m_sample_rate != (uint32_t)new_rate) {
-							blog(LOG_INFO, "[obs-mpv] Audio sample rate changed from %u to %" PRId64, m_sample_rate, new_rate);
-							m_sample_rate = (uint32_t)new_rate;
-						}
-					}
-				}
-				if (event->event_id == MPV_EVENT_FILE_LOADED) {
-					obs_log(LOG_INFO, "MPV: File Loaded");
-					m_is_loading = false; // Loading finished
-					tracks_changed = true;
-					m_total_audio_frames = 0; // Reset A/V sync on new file
-					m_audio_start_ts = 0;
-					m_av_sync_started = false;
-
-					int64_t new_rate = 0;
-					if (mpv_get_property(m_mpv, "audio-params/samplerate", MPV_FORMAT_INT64, &new_rate) == 0 && new_rate > 0) {
-						if (m_sample_rate != (uint32_t)new_rate) {
-							blog(LOG_INFO, "[obs-mpv] Audio sample rate set to %" PRId64, new_rate);
-							m_sample_rate = (uint32_t)new_rate;
-						}
-					}
-
-					if(m_current_index >= 0 && (size_t)m_current_index < m_playlist.size()) {
-						auto& item = m_playlist[m_current_index];
-						if (item.last_seek_pos > 0) {
-							seek(item.last_seek_pos);
-						}
-					}
-				}
-				if (event->event_id == MPV_EVENT_END_FILE) {
-					auto end_ev = static_cast<mpv_event_end_file*>(event->data);
-					obs_log(LOG_INFO, "MPV: End File (Reason: %d)", end_ev->reason);
-
-					if(m_current_index >= 0 && (size_t)m_current_index < m_playlist.size()) {
-						m_playlist[m_current_index].last_seek_pos = 0; // Reset seek pos
-					}
-
-					// Only proceed if natural EOF
-					if (end_ev->reason == MPV_END_FILE_REASON_EOF) {
-						playlist_next();
-					}
+			int64_t new_rate = 0;
+			if (mpv_get_property(m_mpv, "audio-params/samplerate", MPV_FORMAT_INT64, &new_rate) == 0 && new_rate > 0) {
+				if (m_sample_rate != (uint32_t)new_rate) {
+					blog(LOG_INFO, "[obs-mpv] Audio sample rate set to %" PRId64, new_rate);
+					m_sample_rate = (uint32_t)new_rate;
 				}
 			}
 
-			if (tracks_changed) {
-				obs_data_t *s = obs_source_get_settings(m_source);
-				auto build_track_list = [&](const char *type) -> std::string {
-					std::string out;
-					auto tracks = get_tracks(type);
-					for (const auto &t : tracks) {
-						if (!out.empty()) out += "|";
-						out += std::to_string(t.id) + ":" + t.name + ":" + (t.selected ? "1" : "0");
+			if(m_current_index >= 0 && (size_t)m_current_index < m_playlist.size()) {
+				auto& item = m_playlist[m_current_index];
+				if (item.last_seek_pos > 0) {
+					seek(item.last_seek_pos);
+				}
+			}
+		}
+		if (event->event_id == MPV_EVENT_END_FILE) {
+			auto end_ev = static_cast<mpv_event_end_file*>(event->data);
+			obs_log(LOG_INFO, "MPV: End File (Reason: %d)", end_ev->reason);
+
+			if(m_current_index >= 0 && (size_t)m_current_index < m_playlist.size()) {
+				m_playlist[m_current_index].last_seek_pos = 0; // Reset seek pos
+			}
+
+			// Only proceed if natural EOF
+			if (end_ev->reason == MPV_END_FILE_REASON_EOF) {
+				playlist_next();
+			}
+		}
+	}
+
+	if (tracks_changed) {
+		obs_data_t *s = obs_source_get_settings(m_source);
+		auto build_track_list = [&](const char *type) -> std::string {
+			std::string out;
+			auto tracks = get_tracks(type);
+			for (const auto &t : tracks) {
+				if (!out.empty()) out += "|";
+				out += std::to_string(t.id) + ":" + t.name + ":" + (t.selected ? "1" : "0");
+			}
+			return out;
+		};
+		obs_data_set_string(s, "track_list_audio", build_track_list("audio").c_str());
+		obs_data_set_string(s, "track_list_sub", build_track_list("sub").c_str());
+		obs_data_release(s);
+	}
+}
+
+void ObsMpvSource::playlist_add(const std::string& path) {
+	playlist_add_multiple({path});
+}
+
+void ObsMpvSource::playlist_add_multiple(const std::vector<std::string>& paths) {
+	obs_log(LOG_INFO, "Adding %zu files to playlist", paths.size());
+	mpv_handle *probe_mpv = mpv_create();
+	if (!probe_mpv) return;
+
+	mpv_set_option_string(probe_mpv, "vo", "null");
+	mpv_set_option_string(probe_mpv, "ao", "null");
+	mpv_set_option_string(probe_mpv, "idle", "yes");
+	if (mpv_initialize(probe_mpv) < 0) {
+		mpv_terminate_destroy(probe_mpv);
+		return;
+	}
+
+	for (const auto& path : paths) {
+		FileMetadata meta = {0.0, 0.0, 0, {}, {}};
+		const char *cmd[] = {"loadfile", path.c_str(), nullptr};
+		mpv_command(probe_mpv, cmd);
+
+		while (true) {
+			mpv_event *event = mpv_wait_event(probe_mpv, 1.0);
+			if (event->event_id == MPV_EVENT_FILE_LOADED) {
+				mpv_get_property(probe_mpv, "duration", MPV_FORMAT_DOUBLE, &meta.duration);
+				mpv_get_property(probe_mpv, "container-fps", MPV_FORMAT_DOUBLE, &meta.fps);
+				mpv_get_property(probe_mpv, "audio-params/channel-count", MPV_FORMAT_INT64, &meta.channels);
+
+				mpv_node node;
+				if (mpv_get_property(probe_mpv, "track-list", MPV_FORMAT_NODE, &node) == 0) {
+					if (node.format == MPV_FORMAT_NODE_ARRAY) {
+						for (int i = 0; i < node.u.list->num; i++) {
+							mpv_node *tr = &node.u.list->values[i];
+							const char *t=nullptr, *l=nullptr; int64_t id=-1;
+							for (int j=0; j<tr->u.list->num; j++) {
+								const char *k = tr->u.list->keys[j]; mpv_node *v = &tr->u.list->values[j];
+								if (!strcmp(k, "type")) t=v->u.string;
+								else if (!strcmp(k, "id")) id=v->u.int64;
+								else if (!strcmp(k, "lang")) l=v->u.string;
+							}
+							if (t && !strcmp(t, "audio")) meta.audio_tracks.push_back({(int)id, l ? l : std::to_string(id), false});
+							if (t && !strcmp(t, "sub")) meta.sub_tracks.push_back({(int)id, l ? l : std::to_string(id), false});
+						}
 					}
-					return out;
-				};
-				obs_data_set_string(s, "track_list_audio", build_track_list("audio").c_str());
-				obs_data_set_string(s, "track_list_sub", build_track_list("sub").c_str());
-				obs_data_release(s);
+					mpv_free_node_contents(&node);
+				}
+				break;
+			}
+			if (event->event_id == MPV_EVENT_SHUTDOWN || event->event_id == MPV_EVENT_NONE || event->event_id == MPV_EVENT_END_FILE) {
+				// Failed to load or end
+				if (event->event_id != MPV_EVENT_FILE_LOADED) break;
 			}
 		}
 
-		void ObsMpvSource::playlist_add(const std::string& path) {
-			playlist_add_multiple({path});
+		PlaylistItem item;
+		item.path = path;
+		item.duration = meta.duration;
+		item.fps = meta.fps;
+		item.audio_channels = (int)meta.channels;
+		item.audio_tracks = meta.audio_tracks;
+		item.sub_tracks = meta.sub_tracks;
+		size_t last_slash = path.find_last_of("/\\");
+		item.name = (last_slash == std::string::npos) ? path : path.substr(last_slash + 1);
+		m_playlist.push_back(item);
+	}
+
+	mpv_terminate_destroy(probe_mpv);
+}
+
+void ObsMpvSource::playlist_remove(int index) {
+	if (index >= 0 && (size_t)index < m_playlist.size()) {
+		m_playlist.erase(m_playlist.begin() + index);
+		if (index == m_current_index) {
+			stop();
+			m_current_index = -1;
+		} else if (index < m_current_index) {
+			m_current_index--;
+		}
+	}
+}
+
+void ObsMpvSource::playlist_move(int from, int to) {
+	if (from >= 0 && (size_t)from < m_playlist.size() && to >= 0 && (size_t)to < m_playlist.size() && from != to) {
+		auto item = m_playlist[from];
+		m_playlist.erase(m_playlist.begin() + from);
+		m_playlist.insert(m_playlist.begin() + to, item);
+
+		// Update current index if moved item is currently playing
+		if (m_current_index == from) {
+			m_current_index = to;
+		}
+	}
+}
+
+void ObsMpvSource::set_auto_obs_fps(bool enabled) { m_auto_obs_fps = enabled; }
+bool ObsMpvSource::get_auto_obs_fps() { return m_auto_obs_fps; }
+
+void ObsMpvSource::playlist_play(int index) {
+	if (index >= 0 && (size_t)index < m_playlist.size()) {
+		m_flush_audio_buffer = true;
+		obs_log(LOG_INFO, "Playlist Play request: index %d", index);
+		m_is_loading = true; // Start blackout
+		m_current_index = index;
+		auto& item = m_playlist[index];
+
+		const char *cmd[] = {"loadfile", item.path.c_str(), nullptr};
+		mpv_command_async(m_mpv, 0, cmd);
+
+		if (m_auto_obs_fps && item.fps > 0) {
+			obs_video_info ovi;
+			if (obs_get_video_info(&ovi)) {
+				// Approximate fraction
+				uint32_t num = (uint32_t)(item.fps * 100000.0 + 0.5);
+				uint32_t den = 100000;
+
+				// Common rates check to get exact standard values
+				if (std::abs(item.fps - 60.0) < 0.01) { num=60; den=1; }
+				else if (std::abs(item.fps - 30.0) < 0.01) { num=30; den=1; }
+				else if (std::abs(item.fps - 50.0) < 0.01) { num=50; den=1; }
+				else if (std::abs(item.fps - 25.0) < 0.01) { num=25; den=1; }
+				else if (std::abs(item.fps - 24.0) < 0.01) { num=24; den=1; }
+				else if (std::abs(item.fps - 59.94) < 0.01) { num=60000; den=1001; }
+				else if (std::abs(item.fps - 29.97) < 0.01) { num=30000; den=1001; }
+				else if (std::abs(item.fps - 23.976) < 0.01) { num=24000; den=1001; }
+
+				if (ovi.fps_num != num || ovi.fps_den != den) {
+					ovi.fps_num = num;
+					ovi.fps_den = den;
+					obs_log(LOG_INFO, "Auto-matching OBS FPS to %.2f (%u/%u)", item.fps, num, den);
+					obs_reset_video(&ovi);
+				}
+			}
 		}
 
-		void ObsMpvSource::playlist_add_multiple(const std::vector<std::string>& paths) {
-			obs_log(LOG_INFO, "Adding %zu files to playlist", paths.size());
-			mpv_handle *probe_mpv = mpv_create();
-			if (!probe_mpv) return;
+		// Force start playback
+		mpv_set_property_string(m_mpv, "pause", "no");
 
+		// Apply saved settings
+		set_volume(item.volume);
+
+		if (item.audio_track < 0) mpv_set_property_string(m_mpv, "aid", "no");
+		else mpv_set_property_string(m_mpv, "aid", std::to_string(item.audio_track).c_str());
+
+		if (item.sub_track < 0) mpv_set_property_string(m_mpv, "sid", "no");
+		else mpv_set_property_string(m_mpv, "sid", std::to_string(item.sub_track).c_str());
+
+		mpv_set_property_string(m_mpv, "loop-file", item.loop ? "inf" : "no");
+
+		// Audio Fades
+		std::string filters = "";
+		if (item.fade_in_enabled && item.fade_in > 0) {
+			filters += "lavfi=[afade=t=in:st=0:d="+ std::to_string(item.fade_in) + "]";
+		}
+		if (item.fade_out_enabled && item.fade_out > 0 && item.duration > item.fade_out) {
+			if (!filters.empty()) filters += ",";
+			double start_time = item.duration - item.fade_out;
+			filters += "lavfi=[afade=t=out:st="+ std::to_string(start_time) + ":d="+ std::to_string(item.fade_out) + "]";
+		}
+		if (!filters.empty()) {
+			mpv_set_property_string(m_mpv, "af", filters.c_str());
+		} else {
+			mpv_set_property_string(m_mpv, "af", "");
+		}
+
+		if (!item.ext_sub_path.empty()) {
+			const char *sub_cmd[] = {"sub-add", item.ext_sub_path.c_str(), "select", nullptr};
+			mpv_command_async(m_mpv, 0, sub_cmd);
+		}
+	}
+}
+
+void ObsMpvSource::playlist_next() {
+	obs_log(LOG_INFO, "Playlist Next triggered. Current: %d", m_current_index);
+	if (m_current_index >= 0 && (size_t)m_current_index < m_playlist.size()) {
+		if (m_playlist[m_current_index].loop) {
+			playlist_play(m_current_index); // Loop current file
+			return;
+		}
+	}
+
+	if ((size_t)(m_current_index + 1) < m_playlist.size()) {
+		playlist_play(m_current_index + 1);
+	} else {
+		m_current_index = -1;
+		// End of playlist
+	}
+}
+
+ObsMpvSource::PlaylistItem* ObsMpvSource::playlist_get_item(int index) {
+	if (index >= 0 && (size_t)index < m_playlist.size()) {
+		return &m_playlist[index];
+	}
+	return nullptr;
+}
+
+int ObsMpvSource::playlist_count() {
+	return (int)m_playlist.size();
+}
+
+void ObsMpvSource::play() { mpv_set_property_string(m_mpv, "pause", "no"); }
+void ObsMpvSource::pause() { mpv_set_property_string(m_mpv, "pause", "yes"); }
+void ObsMpvSource::stop() {
+	mpv_command_string(m_mpv, "stop");
+}
+void ObsMpvSource::seek(double s) { mpv_set_property(m_mpv, "time-pos", MPV_FORMAT_DOUBLE, &s); }
+double ObsMpvSource::get_time_pos() { double v=0; mpv_get_property(m_mpv, "time-pos", MPV_FORMAT_DOUBLE, &v); return v; }
+double ObsMpvSource::get_duration() { double v=0; mpv_get_property(m_mpv, "duration", MPV_FORMAT_DOUBLE, &v); return v; }
+double ObsMpvSource::get_volume() { double v=100; mpv_get_property(m_mpv, "volume", MPV_FORMAT_DOUBLE, &v); return v; }
+void ObsMpvSource::set_volume(double vol) { mpv_set_property(m_mpv, "volume", MPV_FORMAT_DOUBLE, &vol); }
+
+bool ObsMpvSource::is_playing() {
+	int p=1;
+	mpv_get_property(m_mpv, "pause", MPV_FORMAT_FLAG, &p);
+	return p==0 && !is_idle();
+}
+
+bool ObsMpvSource::is_paused(){
+	int p=0;
+	mpv_get_property(m_mpv, "pause", MPV_FORMAT_FLAG, &p);
+	return p==1 && !is_idle();
+}
+
+bool ObsMpvSource::is_idle(){
+	int idle=0;
+	mpv_get_property(m_mpv, "idle-active", MPV_FORMAT_FLAG, &idle);
+	return idle==1;
+}
+
+std::vector<ObsMpvSource::MpvTrack> ObsMpvSource::get_tracks(const char *type) {
+	std::vector<MpvTrack> res;
+	mpv_node node;
+	if (mpv_get_property(m_mpv, "track-list", MPV_FORMAT_NODE, &node) == 0) {
+		if (node.format == MPV_FORMAT_NODE_ARRAY) {
+			for (int i = 0; i < node.u.list->num; i++) {
+				mpv_node *tr = &node.u.list->values[i];
+				const char *t=nullptr, *l=nullptr; int64_t id=-1; bool s=false;
+				for (int j=0; j<tr->u.list->num; j++) {
+					const char *k = tr->u.list->keys[j]; mpv_node *v = &tr->u.list->values[j];
+					if (!strcmp(k, "type")) t=v->u.string; else if (!strcmp(k, "id")) id=v->u.int64;
+					else if (!strcmp(k, "lang")) l=v->u.string; else if (!strcmp(k, "selected")) s=v->u.flag;
+				}
+				if (t && !strcmp(t, type)) res.push_back({(int)id, l ? l : std::to_string(id), s});
+			}
+		}
+		mpv_free_node_contents(&node);
+	}
+	return res;
+}
+
+void ObsMpvSource::obs_media_play_pause(void *d, bool p) { if (p) static_cast<ObsMpvSource*>(d)->pause(); else static_cast<ObsMpvSource*>(d)->play(); }
+void ObsMpvSource::obs_media_stop(void *d) { static_cast<ObsMpvSource*>(d)->stop(); }
+int64_t ObsMpvSource::obs_media_get_duration(void *d) { return (int64_t)(static_cast<ObsMpvSource*>(d)->get_duration()*1000); }
+int64_t ObsMpvSource::obs_media_get_time(void *d) { return (int64_t)(static_cast<ObsMpvSource*>(d)->get_time_pos()*1000); }
+void ObsMpvSource::obs_media_set_time(void *d, int64_t ms) { static_cast<ObsMpvSource*>(d)->seek(ms/1000.0); }
+enum obs_media_state ObsMpvSource::obs_media_get_state(void *d) {
+	auto s = static_cast<ObsMpvSource*>(d);
+	if (s->is_playing()) return OBS_MEDIA_STATE_PLAYING;
+	if (s->is_paused()) return OBS_MEDIA_STATE_PAUSED;
+	return OBS_MEDIA_STATE_STOPPED;
+}
+
+uint32_t ObsMpvSource::obs_get_width(void *d) { return static_cast<ObsMpvSource*>(d)->m_width; }
+uint32_t ObsMpvSource::obs_get_height(void *d) { return static_cast<ObsMpvSource*>(d)->m_height; }
+
+void ObsMpvSource::obs_save(void *data, obs_data_t *settings) {
+	static_cast<ObsMpvSource*>(data)->save_playlist(settings);
+}
+
+void ObsMpvSource::save_playlist(obs_data_t *settings) {
+	obs_data_set_bool(settings, "auto_obs_fps", m_auto_obs_fps);
+	obs_data_array_t *array = obs_data_array_create();
+	for (const auto& item : m_playlist) {
+		obs_data_t *obj = obs_data_create();
+		obs_data_set_string(obj, "path", item.path.c_str());
+		obs_data_set_string(obj, "name", item.name.c_str());
+		obs_data_set_double(obj, "duration", item.duration);
+		obs_data_set_double(obj, "volume", item.volume);
+		obs_data_set_bool(obj, "loop", item.loop);
+		obs_data_set_int(obj, "audio_track", item.audio_track);
+		obs_data_set_int(obj, "sub_track", item.sub_track);
+		obs_data_set_string(obj, "ext_sub_path", item.ext_sub_path.c_str());
+		obs_data_set_bool(obj, "fade_in_enabled", item.fade_in_enabled);
+		obs_data_set_double(obj, "fade_in", item.fade_in);
+		obs_data_set_bool(obj, "fade_out_enabled", item.fade_out_enabled);
+		obs_data_set_double(obj, "fade_out", item.fade_out);
+
+		obs_data_array_push_back(array, obj);
+		obs_data_release(obj);
+	}
+	obs_data_set_array(settings, "playlist", array);
+	obs_data_array_release(array);
+}
+
+void ObsMpvSource::load_playlist(obs_data_t *settings) {
+	obs_data_array_t *array = obs_data_get_array(settings, "playlist");
+	if (!array) return;
+
+	m_playlist.clear();
+	size_t count = obs_data_array_count(array);
+	for (size_t i = 0; i < count; i++) {
+		obs_data_t *obj = obs_data_array_item(array, i);
+		PlaylistItem item;
+		item.path = obs_data_get_string(obj, "path");
+		item.name = obs_data_get_string(obj, "name");
+		item.duration = obs_data_get_double(obj, "duration");
+		item.volume = obs_data_get_double(obj, "volume");
+		item.loop = obs_data_get_bool(obj, "loop");
+		item.audio_track = (int)obs_data_get_int(obj, "audio_track");
+		item.sub_track = (int)obs_data_get_int(obj, "sub_track");
+		item.ext_sub_path = obs_data_get_string(obj, "ext_sub_path");
+		item.fade_in_enabled = obs_data_get_bool(obj, "fade_in_enabled");
+		item.fade_in = obs_data_get_double(obj, "fade_in");
+		item.fade_out_enabled = obs_data_get_bool(obj, "fade_out_enabled");
+		item.fade_out = obs_data_get_double(obj, "fade_out");
+
+		// Re-probe tracks for metadata
+		mpv_handle *probe_mpv = mpv_create();
+		if (probe_mpv) {
 			mpv_set_option_string(probe_mpv, "vo", "null");
 			mpv_set_option_string(probe_mpv, "ao", "null");
-			mpv_set_option_string(probe_mpv, "idle", "yes");
-			if (mpv_initialize(probe_mpv) < 0) {
-				mpv_terminate_destroy(probe_mpv);
-				return;
-			}
+			mpv_initialize(probe_mpv);
+			const char *cmd[] = {"loadfile", item.path.c_str(), nullptr};
+			mpv_command(probe_mpv, cmd);
+			while (true) {
+				mpv_event *event = mpv_wait_event(probe_mpv, 0.5);
+				if (event->event_id == MPV_EVENT_FILE_LOADED) {
+					mpv_get_property(probe_mpv, "container-fps", MPV_FORMAT_DOUBLE, &item.fps);
+					int64_t ch = 0;
+					mpv_get_property(probe_mpv, "audio-params/channel-count", MPV_FORMAT_INT64, &ch);
+					item.audio_channels = (int)ch;
 
-			for (const auto& path : paths) {
-				FileMetadata meta = {0.0, 0.0, 0, {}, {}};
-				const char *cmd[] = {"loadfile", path.c_str(), nullptr};
-				mpv_command(probe_mpv, cmd);
-
-				while (true) {
-					mpv_event *event = mpv_wait_event(probe_mpv, 1.0);
-					if (event->event_id == MPV_EVENT_FILE_LOADED) {
-						mpv_get_property(probe_mpv, "duration", MPV_FORMAT_DOUBLE, &meta.duration);
-						mpv_get_property(probe_mpv, "container-fps", MPV_FORMAT_DOUBLE, &meta.fps);
-						mpv_get_property(probe_mpv, "audio-params/channel-count", MPV_FORMAT_INT64, &meta.channels);
-
-						mpv_node node;
-						if (mpv_get_property(probe_mpv, "track-list", MPV_FORMAT_NODE, &node) == 0) {
-							if (node.format == MPV_FORMAT_NODE_ARRAY) {
-								for (int i = 0; i < node.u.list->num; i++) {
-									mpv_node *tr = &node.u.list->values[i];
-									const char *t=nullptr, *l=nullptr; int64_t id=-1;
-									for (int j=0; j<tr->u.list->num; j++) {
-										const char *k = tr->u.list->keys[j]; mpv_node *v = &tr->u.list->values[j];
-										if (!strcmp(k, "type")) t=v->u.string;
-										else if (!strcmp(k, "id")) id=v->u.int64;
-										else if (!strcmp(k, "lang")) l=v->u.string;
-									}
-									if (t && !strcmp(t, "audio")) meta.audio_tracks.push_back({(int)id, l ? l : std::to_string(id), false});
-									if (t && !strcmp(t, "sub")) meta.sub_tracks.push_back({(int)id, l ? l : std::to_string(id), false});
+					mpv_node node;
+					if (mpv_get_property(probe_mpv, "track-list", MPV_FORMAT_NODE, &node) == 0) {
+						if (node.format == MPV_FORMAT_NODE_ARRAY) {
+							for (int k = 0; k < node.u.list->num; k++) {
+								mpv_node *tr = &node.u.list->values[k];
+								const char *t=nullptr, *l=nullptr; int64_t tid=-1;
+								for (int j=0; j<tr->u.list->num; j++) {
+									const char *key = tr->u.list->keys[j]; mpv_node *v = &tr->u.list->values[j];
+									if (!strcmp(key, "type")) t=v->u.string;
+									else if (!strcmp(key, "id")) tid=v->u.int64;
+									else if (!strcmp(key, "lang")) l=v->u.string;
 								}
+								if (t && !strcmp(t, "audio")) item.audio_tracks.push_back({(int)tid, l ? l : std::to_string(tid), false});
+								if (t && !strcmp(t, "sub")) item.sub_tracks.push_back({(int)tid, l ? l : std::to_string(tid), false});
 							}
-							mpv_free_node_contents(&node);
 						}
-						break;
+						mpv_free_node_contents(&node);
 					}
-					if (event->event_id == MPV_EVENT_SHUTDOWN || event->event_id == MPV_EVENT_NONE || event->event_id == MPV_EVENT_END_FILE) {
-						// Failed to load or end
-						if (event->event_id != MPV_EVENT_FILE_LOADED) break;
-					}
+					break;
 				}
-
-				PlaylistItem item;
-				item.path = path;
-				item.duration = meta.duration;
-				item.fps = meta.fps;
-				item.audio_channels = (int)meta.channels;
-				item.audio_tracks = meta.audio_tracks;
-				item.sub_tracks = meta.sub_tracks;
-				size_t last_slash = path.find_last_of("/\\");
-				item.name = (last_slash == std::string::npos) ? path : path.substr(last_slash + 1);
-				m_playlist.push_back(item);
+				if (event->event_id == MPV_EVENT_NONE || event->event_id == MPV_EVENT_SHUTDOWN) break;
 			}
-
 			mpv_terminate_destroy(probe_mpv);
 		}
 
-		void ObsMpvSource::playlist_remove(int index) {
-			if (index >= 0 && (size_t)index < m_playlist.size()) {
-				m_playlist.erase(m_playlist.begin() + index);
-				if (index == m_current_index) {
-					stop();
-					m_current_index = -1;
-				} else if (index < m_current_index) {
-					m_current_index--;
-				}
-			}
-		}
-
-		void ObsMpvSource::playlist_move(int from, int to) {
-			if (from >= 0 && (size_t)from < m_playlist.size() && to >= 0 && (size_t)to < m_playlist.size() && from != to) {
-				auto item = m_playlist[from];
-				m_playlist.erase(m_playlist.begin() + from);
-				m_playlist.insert(m_playlist.begin() + to, item);
-
-				// Update current index if moved item is currently playing
-				if (m_current_index == from) {
-					m_current_index = to;
-				}
-			}
-		}
-
-		void ObsMpvSource::set_auto_obs_fps(bool enabled) { m_auto_obs_fps = enabled; }
-		bool ObsMpvSource::get_auto_obs_fps() { return m_auto_obs_fps; }
-
-		void ObsMpvSource::playlist_play(int index) {
-			if (index >= 0 && (size_t)index < m_playlist.size()) {
-				m_flush_audio_buffer = true;
-				obs_log(LOG_INFO, "Playlist Play request: index %d", index);
-				m_is_loading = true; // Start blackout
-				m_current_index = index;
-				auto& item = m_playlist[index];
-
-				const char *cmd[] = {"loadfile", item.path.c_str(), nullptr};
-				mpv_command_async(m_mpv, 0, cmd);
-
-				if (m_auto_obs_fps && item.fps > 0) {
-					obs_video_info ovi;
-					if (obs_get_video_info(&ovi)) {
-						// Approximate fraction
-						uint32_t num = (uint32_t)(item.fps * 100000.0 + 0.5);
-						uint32_t den = 100000;
-
-						// Common rates check to get exact standard values
-						if (std::abs(item.fps - 60.0) < 0.01) { num=60; den=1; }
-						else if (std::abs(item.fps - 30.0) < 0.01) { num=30; den=1; }
-						else if (std::abs(item.fps - 50.0) < 0.01) { num=50; den=1; }
-						else if (std::abs(item.fps - 25.0) < 0.01) { num=25; den=1; }
-						else if (std::abs(item.fps - 24.0) < 0.01) { num=24; den=1; }
-						else if (std::abs(item.fps - 59.94) < 0.01) { num=60000; den=1001; }
-						else if (std::abs(item.fps - 29.97) < 0.01) { num=30000; den=1001; }
-						else if (std::abs(item.fps - 23.976) < 0.01) { num=24000; den=1001; }
-
-						if (ovi.fps_num != num || ovi.fps_den != den) {
-							ovi.fps_num = num;
-							ovi.fps_den = den;
-							obs_log(LOG_INFO, "Auto-matching OBS FPS to %.2f (%u/%u)", item.fps, num, den);
-							obs_reset_video(&ovi);
-						}
-					}
-				}
-
-				// Force start playback
-				mpv_set_property_string(m_mpv, "pause", "no");
-
-				// Apply saved settings
-				set_volume(item.volume);
-
-				if (item.audio_track < 0) mpv_set_property_string(m_mpv, "aid", "no");
-				else mpv_set_property_string(m_mpv, "aid", std::to_string(item.audio_track).c_str());
-
-				if (item.sub_track < 0) mpv_set_property_string(m_mpv, "sid", "no");
-				else mpv_set_property_string(m_mpv, "sid", std::to_string(item.sub_track).c_str());
-
-				mpv_set_property_string(m_mpv, "loop-file", item.loop ? "inf" : "no");
-
-				// Audio Fades
-				std::string filters = "";
-				if (item.fade_in_enabled && item.fade_in > 0) {
-					filters += "lavfi=[afade=t=in:st=0:d="+ std::to_string(item.fade_in) + "]";
-				}
-				if (item.fade_out_enabled && item.fade_out > 0 && item.duration > item.fade_out) {
-					if (!filters.empty()) filters += ",";
-					double start_time = item.duration - item.fade_out;
-					filters += "lavfi=[afade=t=out:st="+ std::to_string(start_time) + ":d="+ std::to_string(item.fade_out) + "]";
-				}
-				if (!filters.empty()) {
-					mpv_set_property_string(m_mpv, "af", filters.c_str());
-				} else {
-					mpv_set_property_string(m_mpv, "af", "");
-				}
-
-				if (!item.ext_sub_path.empty()) {
-					const char *sub_cmd[] = {"sub-add", item.ext_sub_path.c_str(), "select", nullptr};
-					mpv_command_async(m_mpv, 0, sub_cmd);
-				}
-			}
-		}
-
-		void ObsMpvSource::playlist_next() {
-			obs_log(LOG_INFO, "Playlist Next triggered. Current: %d", m_current_index);
-			if (m_current_index >= 0 && (size_t)m_current_index < m_playlist.size()) {
-				if (m_playlist[m_current_index].loop) {
-					playlist_play(m_current_index); // Loop current file
-					return;
-				}
-			}
-
-			if ((size_t)(m_current_index + 1) < m_playlist.size()) {
-				playlist_play(m_current_index + 1);
-			} else {
-				m_current_index = -1;
-				// End of playlist
-			}
-		}
-
-		ObsMpvSource::PlaylistItem* ObsMpvSource::playlist_get_item(int index) {
-			if (index >= 0 && (size_t)index < m_playlist.size()) {
-				return &m_playlist[index];
-			}
-			return nullptr;
-		}
-
-		int ObsMpvSource::playlist_count() {
-			return (int)m_playlist.size();
-		}
-
-		void ObsMpvSource::play() { mpv_set_property_string(m_mpv, "pause", "no"); }
-		void ObsMpvSource::pause() { mpv_set_property_string(m_mpv, "pause", "yes"); }
-		void ObsMpvSource::stop() {
-			mpv_command_string(m_mpv, "stop");
-		}
-		void ObsMpvSource::seek(double s) { mpv_set_property(m_mpv, "time-pos", MPV_FORMAT_DOUBLE, &s); }
-		double ObsMpvSource::get_time_pos() { double v=0; mpv_get_property(m_mpv, "time-pos", MPV_FORMAT_DOUBLE, &v); return v; }
-		double ObsMpvSource::get_duration() { double v=0; mpv_get_property(m_mpv, "duration", MPV_FORMAT_DOUBLE, &v); return v; }
-		double ObsMpvSource::get_volume() { double v=100; mpv_get_property(m_mpv, "volume", MPV_FORMAT_DOUBLE, &v); return v; }
-		void ObsMpvSource::set_volume(double vol) { mpv_set_property(m_mpv, "volume", MPV_FORMAT_DOUBLE, &vol); }
-
-		bool ObsMpvSource::is_playing() {
-			int p=1;
-			mpv_get_property(m_mpv, "pause", MPV_FORMAT_FLAG, &p);
-			return p==0 && !is_idle();
-		}
-
-		bool ObsMpvSource::is_paused(){
-			int p=0;
-			mpv_get_property(m_mpv, "pause", MPV_FORMAT_FLAG, &p);
-			return p==1 && !is_idle();
-		}
-
-		bool ObsMpvSource::is_idle(){
-			int idle=0;
-			mpv_get_property(m_mpv, "idle-active", MPV_FORMAT_FLAG, &idle);
-			return idle==1;
-		}
-
-		std::vector<ObsMpvSource::MpvTrack> ObsMpvSource::get_tracks(const char *type) {
-			std::vector<MpvTrack> res;
-			mpv_node node;
-			if (mpv_get_property(m_mpv, "track-list", MPV_FORMAT_NODE, &node) == 0) {
-				if (node.format == MPV_FORMAT_NODE_ARRAY) {
-					for (int i = 0; i < node.u.list->num; i++) {
-						mpv_node *tr = &node.u.list->values[i];
-						const char *t=nullptr, *l=nullptr; int64_t id=-1; bool s=false;
-						for (int j=0; j<tr->u.list->num; j++) {
-							const char *k = tr->u.list->keys[j]; mpv_node *v = &tr->u.list->values[j];
-							if (!strcmp(k, "type")) t=v->u.string; else if (!strcmp(k, "id")) id=v->u.int64;
-							else if (!strcmp(k, "lang")) l=v->u.string; else if (!strcmp(k, "selected")) s=v->u.flag;
-						}
-						if (t && !strcmp(t, type)) res.push_back({(int)id, l ? l : std::to_string(id), s});
-					}
-				}
-				mpv_free_node_contents(&node);
-			}
-			return res;
-		}
-
-		void ObsMpvSource::obs_media_play_pause(void *d, bool p) { if (p) static_cast<ObsMpvSource*>(d)->pause(); else static_cast<ObsMpvSource*>(d)->play(); }
-		void ObsMpvSource::obs_media_stop(void *d) { static_cast<ObsMpvSource*>(d)->stop(); }
-		int64_t ObsMpvSource::obs_media_get_duration(void *d) { return (int64_t)(static_cast<ObsMpvSource*>(d)->get_duration()*1000); }
-		int64_t ObsMpvSource::obs_media_get_time(void *d) { return (int64_t)(static_cast<ObsMpvSource*>(d)->get_time_pos()*1000); }
-		void ObsMpvSource::obs_media_set_time(void *d, int64_t ms) { static_cast<ObsMpvSource*>(d)->seek(ms/1000.0); }
-		enum obs_media_state ObsMpvSource::obs_media_get_state(void *d) {
-			auto s = static_cast<ObsMpvSource*>(d);
-			if (s->is_playing()) return OBS_MEDIA_STATE_PLAYING;
-			if (s->is_paused()) return OBS_MEDIA_STATE_PAUSED;
-			return OBS_MEDIA_STATE_STOPPED;
-		}
-
-		uint32_t ObsMpvSource::obs_get_width(void *d) { return static_cast<ObsMpvSource*>(d)->m_width; }
-		uint32_t ObsMpvSource::obs_get_height(void *d) { return static_cast<ObsMpvSource*>(d)->m_height; }
-
-		void ObsMpvSource::obs_save(void *data, obs_data_t *settings) {
-			static_cast<ObsMpvSource*>(data)->save_playlist(settings);
-		}
-
-		void ObsMpvSource::save_playlist(obs_data_t *settings) {
-			obs_data_set_bool(settings, "auto_obs_fps", m_auto_obs_fps);
-			obs_data_array_t *array = obs_data_array_create();
-			for (const auto& item : m_playlist) {
-				obs_data_t *obj = obs_data_create();
-				obs_data_set_string(obj, "path", item.path.c_str());
-				obs_data_set_string(obj, "name", item.name.c_str());
-				obs_data_set_double(obj, "duration", item.duration);
-				obs_data_set_double(obj, "volume", item.volume);
-				obs_data_set_bool(obj, "loop", item.loop);
-				obs_data_set_int(obj, "audio_track", item.audio_track);
-				obs_data_set_int(obj, "sub_track", item.sub_track);
-				obs_data_set_string(obj, "ext_sub_path", item.ext_sub_path.c_str());
-				obs_data_set_bool(obj, "fade_in_enabled", item.fade_in_enabled);
-				obs_data_set_double(obj, "fade_in", item.fade_in);
-				obs_data_set_bool(obj, "fade_out_enabled", item.fade_out_enabled);
-				obs_data_set_double(obj, "fade_out", item.fade_out);
-
-				obs_data_array_push_back(array, obj);
-				obs_data_release(obj);
-			}
-			obs_data_set_array(settings, "playlist", array);
-			obs_data_array_release(array);
-		}
-
-		void ObsMpvSource::load_playlist(obs_data_t *settings) {
-			obs_data_array_t *array = obs_data_get_array(settings, "playlist");
-			if (!array) return;
-
-			m_playlist.clear();
-			size_t count = obs_data_array_count(array);
-			for (size_t i = 0; i < count; i++) {
-				obs_data_t *obj = obs_data_array_item(array, i);
-				PlaylistItem item;
-				item.path = obs_data_get_string(obj, "path");
-				item.name = obs_data_get_string(obj, "name");
-				item.duration = obs_data_get_double(obj, "duration");
-				item.volume = obs_data_get_double(obj, "volume");
-				item.loop = obs_data_get_bool(obj, "loop");
-				item.audio_track = (int)obs_data_get_int(obj, "audio_track");
-				item.sub_track = (int)obs_data_get_int(obj, "sub_track");
-				item.ext_sub_path = obs_data_get_string(obj, "ext_sub_path");
-				item.fade_in_enabled = obs_data_get_bool(obj, "fade_in_enabled");
-				item.fade_in = obs_data_get_double(obj, "fade_in");
-				item.fade_out_enabled = obs_data_get_bool(obj, "fade_out_enabled");
-				item.fade_out = obs_data_get_double(obj, "fade_out");
-
-				// Re-probe tracks for metadata
-				mpv_handle *probe_mpv = mpv_create();
-				if (probe_mpv) {
-					mpv_set_option_string(probe_mpv, "vo", "null");
-					mpv_set_option_string(probe_mpv, "ao", "null");
-					mpv_initialize(probe_mpv);
-					const char *cmd[] = {"loadfile", item.path.c_str(), nullptr};
-					mpv_command(probe_mpv, cmd);
-					while (true) {
-						mpv_event *event = mpv_wait_event(probe_mpv, 0.5);
-						if (event->event_id == MPV_EVENT_FILE_LOADED) {
-							mpv_get_property(probe_mpv, "container-fps", MPV_FORMAT_DOUBLE, &item.fps);
-							int64_t ch = 0;
-							mpv_get_property(probe_mpv, "audio-params/channel-count", MPV_FORMAT_INT64, &ch);
-							item.audio_channels = (int)ch;
-
-							mpv_node node;
-							if (mpv_get_property(probe_mpv, "track-list", MPV_FORMAT_NODE, &node) == 0) {
-								if (node.format == MPV_FORMAT_NODE_ARRAY) {
-									for (int k = 0; k < node.u.list->num; k++) {
-										mpv_node *tr = &node.u.list->values[k];
-										const char *t=nullptr, *l=nullptr; int64_t tid=-1;
-										for (int j=0; j<tr->u.list->num; j++) {
-											const char *key = tr->u.list->keys[j]; mpv_node *v = &tr->u.list->values[j];
-											if (!strcmp(key, "type")) t=v->u.string;
-											else if (!strcmp(key, "id")) tid=v->u.int64;
-											else if (!strcmp(key, "lang")) l=v->u.string;
-										}
-										if (t && !strcmp(t, "audio")) item.audio_tracks.push_back({(int)tid, l ? l : std::to_string(tid), false});
-										if (t && !strcmp(t, "sub")) item.sub_tracks.push_back({(int)tid, l ? l : std::to_string(tid), false});
-									}
-								}
-								mpv_free_node_contents(&node);
-							}
-							break;
-						}
-						if (event->event_id == MPV_EVENT_NONE || event->event_id == MPV_EVENT_SHUTDOWN) break;
-					}
-					mpv_terminate_destroy(probe_mpv);
-				}
-
-				m_playlist.push_back(item);
-				obs_data_release(obj);
-			}
-			obs_data_array_release(array);
-		}
+		m_playlist.push_back(item);
+		obs_data_release(obj);
+	}
+	obs_data_array_release(array);
+}
