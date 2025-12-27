@@ -131,8 +131,17 @@ void ObsMpvSource::obs_video_tick(void *data, float) {
 			size_t stride = self->m_width * 4;
 			self->m_sw_buffer.resize(stride * self->m_height);
 
+			double video_pts = -1.0;
 			int size[] = {(int)self->m_width, (int)self->m_height};
-			mpv_render_param p[] = {{MPV_RENDER_PARAM_SW_SIZE, size}, {MPV_RENDER_PARAM_SW_FORMAT, (void*)"bgra"}, {MPV_RENDER_PARAM_SW_STRIDE, &stride}, {MPV_RENDER_PARAM_SW_POINTER, self->m_sw_buffer.data()}, {MPV_RENDER_PARAM_INVALID, nullptr}};
+			mpv_render_param p[] = {
+				{MPV_RENDER_PARAM_SW_SIZE, size},
+				{MPV_RENDER_PARAM_SW_FORMAT, (void*)"bgra"},
+				{MPV_RENDER_PARAM_SW_STRIDE, &stride},
+				{MPV_RENDER_PARAM_SW_POINTER, self->m_sw_buffer.data()},
+				// Request the PTS of the rendered frame.
+				{MPV_RENDER_PARAM_VIDEO_PTS, &video_pts},
+				{MPV_RENDER_PARAM_INVALID, nullptr}
+			};
 
 			if (mpv_render_context_render(self->m_mpv_render_ctx, p) >= 0) {
 				struct obs_source_frame frame = {};
@@ -141,9 +150,15 @@ void ObsMpvSource::obs_video_tick(void *data, float) {
 				frame.width = self->m_width;
 				frame.height = self->m_height;
 				frame.format = VIDEO_FORMAT_BGRA;
-				frame.timestamp = os_gettime_ns();
+				
+				if (video_pts > 0) {
+					frame.timestamp = (uint64_t)(video_pts * 1000000000.0);
+				} else {
+					// Fallback if PTS is not available
+					frame.timestamp = os_gettime_ns();
+				}
 
-				if (!self->m_av_sync_started) {
+				if (!self->m_av_sync_started && video_pts > 0) {
 					self->m_av_sync_started = true;
 					self->m_audio_start_ts = frame.timestamp;
 					self->m_total_audio_frames = 0;
