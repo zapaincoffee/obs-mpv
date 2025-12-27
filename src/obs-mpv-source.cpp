@@ -324,7 +324,13 @@ void ObsMpvSource::audio_thread_func() {
 					mpv_get_property(m_mpv, "height", MPV_FORMAT_INT64, &h);
 					m_width = (uint32_t)w; m_height = (uint32_t)h;
 				} else if (event->event_id == MPV_EVENT_AUDIO_RECONFIG) {
-					// TODO: Not implemented yet
+					int64_t new_rate = 0;
+					if (mpv_get_property(m_mpv, "audio-params/samplerate", MPV_FORMAT_INT64, &new_rate) == 0 && new_rate > 0) {
+						if (m_sample_rate != (uint32_t)new_rate) {
+							blog(LOG_INFO, "[obs-mpv] Audio sample rate changed from %u to %lld", m_sample_rate, new_rate);
+							m_sample_rate = (uint32_t)new_rate;
+						}
+					}
 				}
 				if (event->event_id == MPV_EVENT_FILE_LOADED) {
 					obs_log(LOG_INFO, "MPV: File Loaded");
@@ -332,6 +338,14 @@ void ObsMpvSource::audio_thread_func() {
 					tracks_changed = true;
 					m_total_audio_frames = 0; // Reset A/V sync on new file
 					m_audio_start_ts = 0;
+
+					int64_t new_rate = 0;
+					if (mpv_get_property(m_mpv, "audio-params/samplerate", MPV_FORMAT_INT64, &new_rate) == 0 && new_rate > 0) {
+						if (m_sample_rate != (uint32_t)new_rate) {
+							blog(LOG_INFO, "[obs-mpv] Audio sample rate set to %lld", new_rate);
+							m_sample_rate = (uint32_t)new_rate;
+						}
+					}
 
 					if(m_current_index >= 0 && (size_t)m_current_index < m_playlist.size()) {
 						auto& item = m_playlist[m_current_index];
