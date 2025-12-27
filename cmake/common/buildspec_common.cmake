@@ -226,9 +226,9 @@ function(_check_dependencies)
   if(OS_MACOS)
     # Patch obs-studio to enable OBJC/OBJCXX for libobs-metal target
     file(READ "${dependencies_dir}/${_obs_destination}/CMakeLists.txt" _obs_cmakelists)
-    if(NOT _obs_cmakelists MATCHES "enable_language\\(OBJC OBJCXX\\)")
-      file(APPEND "${dependencies_dir}/${_obs_destination}/CMakeLists.txt" "\nif(APPLE)\n  enable_language(OBJC OBJCXX)\nendif()\n")
-      message(STATUS "Patched obs-studio CMakeLists.txt to enable OBJC/OBJCXX")
+    if(NOT _obs_cmakelists MATCHES "enable_language\\(OBJC OBJCXX Swift\\)")
+      file(APPEND "${dependencies_dir}/${_obs_destination}/CMakeLists.txt" "\nif(APPLE)\n  enable_language(OBJC OBJCXX Swift)\nendif()\n")
+      message(STATUS "Patched obs-studio CMakeLists.txt to enable OBJC/OBJCXX/Swift")
     endif()
   endif()
 

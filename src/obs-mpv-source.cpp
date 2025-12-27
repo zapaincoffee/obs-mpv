@@ -3,7 +3,9 @@
 #include <util/threading.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#ifndef _WIN32
 #include <unistd.h>
+#endif
 #include <cstdio>
 #include <cstdarg>
 #include <cmath>
