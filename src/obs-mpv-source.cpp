@@ -11,6 +11,7 @@
 #include <cmath>
 #include <algorithm>
 #include <plugin-support.h>
+#include <cinttypes>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -327,7 +328,7 @@ void ObsMpvSource::audio_thread_func() {
 					int64_t new_rate = 0;
 					if (mpv_get_property(m_mpv, "audio-params/samplerate", MPV_FORMAT_INT64, &new_rate) == 0 && new_rate > 0) {
 						if (m_sample_rate != (uint32_t)new_rate) {
-							blog(LOG_INFO, "[obs-mpv] Audio sample rate changed from %u to %lld", m_sample_rate, new_rate);
+							blog(LOG_INFO, "[obs-mpv] Audio sample rate changed from %u to %" PRId64, m_sample_rate, new_rate);
 							m_sample_rate = (uint32_t)new_rate;
 						}
 					}
@@ -342,7 +343,7 @@ void ObsMpvSource::audio_thread_func() {
 					int64_t new_rate = 0;
 					if (mpv_get_property(m_mpv, "audio-params/samplerate", MPV_FORMAT_INT64, &new_rate) == 0 && new_rate > 0) {
 						if (m_sample_rate != (uint32_t)new_rate) {
-							blog(LOG_INFO, "[obs-mpv] Audio sample rate set to %lld", new_rate);
+							blog(LOG_INFO, "[obs-mpv] Audio sample rate set to %" PRId64, new_rate);
 							m_sample_rate = (uint32_t)new_rate;
 						}
 					}
