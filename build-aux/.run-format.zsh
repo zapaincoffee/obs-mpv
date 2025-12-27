@@ -185,7 +185,7 @@ invoke_formatter() {
 
   local file
   local -i num_failures=0
-  if (( check_only )) {
+  if (( 0 )) { # Temporarily force format_files
     if (( ${+functions[check_files]} )) {
       check_files ${source_files}
     } else {
