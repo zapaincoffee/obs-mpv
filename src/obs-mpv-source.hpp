@@ -120,6 +120,9 @@ private:
     
     std::vector<uint8_t> m_sw_buffer;
     
+    std::deque<uint8_t> m_audio_queue;
+    std::mutex m_audio_mutex;
+    
     std::atomic<bool> m_events_available;
     std::atomic<bool> m_redraw_needed;
     std::atomic<bool> m_is_loading;
