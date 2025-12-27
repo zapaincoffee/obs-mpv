@@ -546,7 +546,7 @@ void ObsMpvSource::audio_thread_func() {
 		}
 
 		int ObsMpvSource::playlist_count() {
-			return m_playlist.size();
+			return (int)m_playlist.size();
 		}
 
 		void ObsMpvSource::play() { mpv_set_property_string(m_mpv, "pause", "no"); }
