@@ -131,17 +131,8 @@ void ObsMpvSource::obs_video_tick(void *data, float) {
 			size_t stride = self->m_width * 4;
 			self->m_sw_buffer.resize(stride * self->m_height);
 
-			double video_pts = -1.0;
 			int size[] = {(int)self->m_width, (int)self->m_height};
-			mpv_render_param p[] = {
-				{MPV_RENDER_PARAM_SW_SIZE, size},
-				{MPV_RENDER_PARAM_SW_FORMAT, (void*)"bgra"},
-				{MPV_RENDER_PARAM_SW_STRIDE, &stride},
-				{MPV_RENDER_PARAM_SW_POINTER, self->m_sw_buffer.data()},
-				// Request the PTS of the rendered frame.
-				{MPV_RENDER_PARAM_VIDEO_PTS, &video_pts},
-				{MPV_RENDER_PARAM_INVALID, nullptr}
-			};
+			mpv_render_param p[] = {{MPV_RENDER_PARAM_SW_SIZE, size}, {MPV_RENDER_PARAM_SW_FORMAT, (void*)"bgra"}, {MPV_RENDER_PARAM_SW_STRIDE, &stride}, {MPV_RENDER_PARAM_SW_POINTER, self->m_sw_buffer.data()}, {MPV_RENDER_PARAM_INVALID, nullptr}};
 
 			if (mpv_render_context_render(self->m_mpv_render_ctx, p) >= 0) {
 				struct obs_source_frame frame = {};
@@ -150,19 +141,13 @@ void ObsMpvSource::obs_video_tick(void *data, float) {
 				frame.width = self->m_width;
 				frame.height = self->m_height;
 				frame.format = VIDEO_FORMAT_BGRA;
-				
-				if (video_pts > 0) {
-					frame.timestamp = (uint64_t)(video_pts * 1000000000.0);
-				} else {
-					// Fallback if PTS is not available
-					frame.timestamp = os_gettime_ns();
-				}
+				frame.timestamp = os_gettime_ns();
 
-				if (!self->m_av_sync_started && video_pts > 0) {
+				if (!self->m_av_sync_started) {
 					self->m_av_sync_started = true;
 					self->m_audio_start_ts = frame.timestamp;
 					self->m_total_audio_frames = 0;
-					blog(LOG_INFO, "A/V sync started at %" PRIu64, self->m_audio_start_ts);
+					blog(LOG_INFO, "A/V sync started. First video frame TS: %" PRIu64, self->m_audio_start_ts);
 				}
 
 				obs_source_output_video(self->m_source, &frame);
@@ -301,10 +286,9 @@ void ObsMpvSource::audio_thread_func() {
 				if (bytes_read > 0) {
 					#endif
 					if (!m_av_sync_started) {
-						// Discard audio until the first video frame is rendered
+						blog(LOG_DEBUG, "A/V sync not started, discarding audio chunk.");
 						continue;
 					}
-
 					uint32_t frames = (uint32_t)(bytes_read / sizeof(float) / 2);
 
 					struct obs_source_audio audio = {};
@@ -315,6 +299,10 @@ void ObsMpvSource::audio_thread_func() {
 					audio.frames = frames;
 
 					audio.timestamp = m_audio_start_ts + util_mul_div64(m_total_audio_frames, 1000000000ULL, m_sample_rate);
+					
+					if (m_total_audio_frames == 0) {
+						blog(LOG_INFO, "First audio frame TS: %" PRIu64, audio.timestamp);
+					}
 
 					m_total_audio_frames += frames;
 
