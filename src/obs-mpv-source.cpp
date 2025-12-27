@@ -147,7 +147,7 @@ void ObsMpvSource::obs_video_tick(void *data, float) {
 	}
 }
 
-ObsMpvSource::ObsMpvSource(obs_source_t *source, obs_data_t *settings) : m_source(source), m_width(0), m_height(0), m_events_available(false), m_redraw_needed(false), m_stop_audio_thread(false), m_current_index(-1), m_is_loading(false) {
+ObsMpvSource::ObsMpvSource(obs_source_t *source, obs_data_t *settings) : m_source(source), m_width(0), m_height(0), m_events_available(false), m_redraw_needed(false), m_stop_audio_thread(false), m_flush_audio_buffer(false), m_current_index(-1), m_is_loading(false) {
 	// Setup FIFO/Pipe for audio
 	char fifo_path[256];
 	#ifdef _WIN32
@@ -174,6 +174,14 @@ ObsMpvSource::ObsMpvSource(obs_source_t *source, obs_data_t *settings) : m_sourc
 	m_mpv = mpv_create();
 	mpv_request_log_messages(m_mpv, "info");
 
+	// Get OBS audio sample rate
+	obs_audio_info oai;
+	if (obs_get_audio_info(&oai)) {
+		m_sample_rate = oai.samples_per_sec;
+	} else {
+		m_sample_rate = 48000; // Fallback
+	}
+
 	mpv_set_option_string(m_mpv, "vo", "libmpv");
 	mpv_set_option_string(m_mpv, "hwdec", "auto");
 
@@ -181,7 +189,7 @@ ObsMpvSource::ObsMpvSource(obs_source_t *source, obs_data_t *settings) : m_sourc
 	mpv_set_option_string(m_mpv, "ao", "pcm");
 	mpv_set_option_string(m_mpv, "ao-pcm-file", m_fifo_path.c_str());
 	mpv_set_option_string(m_mpv, "ao-pcm-format", "f32le");
-	mpv_set_option_string(m_mpv, "ao-pcm-rate", "48000");
+	mpv_set_option_string(m_mpv, "ao-pcm-rate", std::to_string(m_sample_rate).c_str());
 	mpv_set_option_string(m_mpv, "ao-pcm-channels", "stereo");
 	mpv_set_option_string(m_mpv, "audio-format", "float");
 
@@ -225,24 +233,32 @@ void ObsMpvSource::audio_thread_func() {
 	// On Windows, we already created the pipe. Wait for client (MPV) to connect.
 	if (m_pipe_handle == INVALID_HANDLE_VALUE) return;
 
-	// ConnectNamedPipe waits for a client process to connect to an instance of a named pipe.
-	// If a client process connects before the function is called, the function returns zero
-	// and GetLastError returns ERROR_PIPE_CONNECTED. This can happen if we are retrying.
-	// However, here we just start the thread once.
-	// Ideally this should check m_stop_audio_thread while waiting, but ConnectNamedPipe is blocking.
-	// For simplicity in this non-overlapped example, we assume MPV connects quickly.
-	// Note: This might block destruction if MPV never connects.
 	BOOL connected = ConnectNamedPipe(m_pipe_handle, NULL) ? TRUE : (GetLastError() == ERROR_PIPE_CONNECTED);
 
 	while (!m_stop_audio_thread && connected) {
+		if (m_flush_audio_buffer) {
+			// Set a short timeout to drain the pipe without blocking forever
+			COMMTIMEOUTS timeouts = {0};
+			timeouts.ReadIntervalTimeout = MAXDWORD;
+			timeouts.ReadTotalTimeoutConstant = 1; // 1ms timeout for reads
+			timeouts.ReadTotalTimeoutMultiplier = 0;
+			SetCommTimeouts(m_pipe_handle, &timeouts);
+
+			DWORD bytes_read_drain = 0;
+			while (ReadFile(m_pipe_handle, buf.data(), (DWORD)chunk_size, &bytes_read_drain, NULL) && bytes_read_drain > 0);
+			m_flush_audio_buffer = false;
+
+			// Restore original pipe mode (blocking)
+			timeouts.ReadTotalTimeoutConstant = 0; // Blocking read
+			SetCommTimeouts(m_pipe_handle, &timeouts);
+		}
+
 		DWORD bytes_read = 0;
 		BOOL success = ReadFile(m_pipe_handle, buf.data(), (DWORD)chunk_size, &bytes_read, NULL);
 
 		if (success && bytes_read > 0) {
 			#else
 			int fd = open(m_fifo_path.c_str(), O_RDONLY | O_NONBLOCK);
-			// On Linux/macOS, open with O_NONBLOCK might return -1 if writer is not yet open.
-			// Ideally we should poll or loop open. For now, let's just loop with sleep until open.
 			int retries = 50;
 			while (fd < 0 && !m_stop_audio_thread && retries-- > 0) {
 				fd = open(m_fifo_path.c_str(), O_RDONLY | O_NONBLOCK);
@@ -251,20 +267,26 @@ void ObsMpvSource::audio_thread_func() {
 			if (fd < 0) return;
 
 			while (!m_stop_audio_thread) {
+				if (m_flush_audio_buffer) {
+					// Drain the non-blocking pipe
+					while (read(fd, buf.data(), chunk_size) > 0);
+					m_flush_audio_buffer = false;
+				}
+
 				ssize_t bytes_read = read(fd, buf.data(), chunk_size);
 				if (bytes_read > 0) {
 					#endif
 					uint32_t frames = (uint32_t)(bytes_read / sizeof(float) / 2);
 
 					struct obs_source_audio audio = {};
-					audio.samples_per_sec = 48000;
+					audio.samples_per_sec = m_sample_rate;
 					audio.speakers = SPEAKERS_STEREO;
 					audio.format = AUDIO_FORMAT_FLOAT;
 					audio.data[0] = buf.data();
 					audio.frames = frames;
 
 					if (m_audio_start_ts == 0) m_audio_start_ts = os_gettime_ns();
-					audio.timestamp = m_audio_start_ts + util_mul_div64(m_total_audio_frames, 1000000000ULL, 48000);
+					audio.timestamp = m_audio_start_ts + util_mul_div64(m_total_audio_frames, 1000000000ULL, m_sample_rate);
 
 					m_total_audio_frames += frames;
 
@@ -450,6 +472,7 @@ void ObsMpvSource::audio_thread_func() {
 
 		void ObsMpvSource::playlist_play(int index) {
 			if (index >= 0 && (size_t)index < m_playlist.size()) {
+				m_flush_audio_buffer = true;
 				obs_log(LOG_INFO, "Playlist Play request: index %d", index);
 				m_is_loading = true; // Start blackout
 				m_current_index = index;

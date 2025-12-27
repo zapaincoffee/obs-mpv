@@ -130,8 +130,10 @@ private:
 #ifdef _WIN32
     void *m_pipe_handle; // HANDLE is void*
 #endif
-    std::thread m_audio_thread;
-    std::atomic<bool> m_stop_audio_thread;
+	std::atomic<bool> m_stop_audio_thread;
+	std::atomic<bool> m_flush_audio_buffer;
+	uint32_t m_sample_rate;
+	std::thread m_audio_thread;
     void audio_thread_func();
     
     // A/V Sync
