@@ -47,7 +47,7 @@ function Build {
     # Download libmpv dev files
     $MpvUrl = "https://sourceforge.net/projects/mpv-player-windows/files/libmpv/mpv-dev-x86_64-20251214-git-f7be2ee.7z/download"
     $MpvZip = "$env:TEMP\mpv-dev.7z"
-    $MpvDir = "$ProjectRoot\mpv-dev"
+    $MpvDir = "$ProjectRoot\libmpv"
     
     Log-Group "Downloading libmpv..."
     # curl -L is much better at SourceForge redirects than Invoke-WebRequest
