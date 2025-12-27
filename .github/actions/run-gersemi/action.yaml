@@ -9,6 +9,10 @@ inputs:
     description: Working directory for checks
     required: false
     default: ${{ github.workspace }}
+  runMode:
+    description: 'Determines if gersemi checks ("check") or formats ("format").'
+    required: false
+    default: check
 runs:
   using: composite
   steps:
@@ -39,12 +43,13 @@ runs:
         echo ::endgroup::
 
     - name: Run gersemi 🎛️
-      if: fromJSON(steps.checks.outputs.hasChangedFiles)
+      if: fromJSON(steps.checks.outputs.hasChangedFiles) || inputs.runMode == 'format' || inputs.runMode == 'format'
       id: result
       shell: zsh --no-rcs --errexit --pipefail {0}
       working-directory: ${{ github.workspace }}
       env:
         CHANGED_FILES: ${{ steps.checks.outputs.changedFiles }}
+        GERSEMI_RUN_MODE: ${{ inputs.runMode }}
       run: |
         : Run gersemi 🎛️
         if (( ${+RUNNER_DEBUG} )) setopt XTRACE
@@ -53,7 +58,10 @@ runs:
         brew install --quiet obsproject/tools/gersemi
         print ::endgroup::
 
-        print ::group::Run gersemi
-        local -a changes=(${(s:,:)CHANGED_FILES//[\[\]\'\"]/})
+        # Temporarily modify the script to force formatting if runMode is 'format'
+        if [[ "${GERSEMI_RUN_MODE}" == "format" ]]; then
+          sed -i 's/local -i check_only=1/local -i check_only=0/' build-aux/run-gersemi
+        fi
+
+        local -a changes=(${(s:,:)CHANGED_FILES//[[\]'"]/})
         ./build-aux/run-gersemi --fail-${{ inputs.failCondition }} --check ${changes}
-        print ::endgroup::
