@@ -1,59 +1,55 @@
-# OBS Plugin Template
+# OBS MPV Source Plugin
 
-## Introduction
+A powerful, high-performance media source plugin for OBS Studio powered by `libmpv`. This plugin offers superior format support, hardware acceleration, and advanced playback controls compared to the standard VLC or Media Source.
 
-The plugin template is meant to be used as a starting point for OBS Studio plugin development. It includes:
+## Key Features
 
-* Boilerplate plugin source code
-* A CMake project file
-* GitHub Actions workflows and repository actions
+*   **Advanced Format Support**: Leverages the power of `libmpv` to play almost any media format (MKV, MP4, MOV, AVI, etc.).
+*   **Playlist Management**: Dedicated dock with a playlist table, drag-and-drop support, and detailed metadata.
+*   **Auto-Match OBS FPS**: Automatically switch OBS global frame rate to match the currently playing video for perfectly smooth playback.
+*   **Detailed Metadata**: View video FPS and audio channel count directly in the playlist.
+*   **Smooth Transitions**: Fixed frame flickering/blackout issues when switching between files in a playlist.
+*   **Cross-Platform**: Fully compatible with **Windows**, **macOS**, and **Linux**.
+*   **Audio Flexibility**: Professional audio handling via FIFO/Named Pipes for low-latency synchronization.
+*   **Subtitle Support**: Full support for internal and external subtitles with advanced styling settings.
+*   **Hardware Acceleration**: Built-in support for GPU-accelerated decoding.
 
-## Supported Build Environments
+## Installation
 
-| Platform  | Tool   |
-|-----------|--------|
-| Windows   | Visual Studio 17 2022 |
-| macOS     | XCode 16.0 |
-| Windows, macOS  | CMake 3.30.5 |
-| Ubuntu 24.04 | CMake 3.28.3 |
-| Ubuntu 24.04 | `ninja-build` |
-| Ubuntu 24.04 | `pkg-config`
-| Ubuntu 24.04 | `build-essential` |
+### Windows
+1. Download the latest `.zip` or `.exe` from the [Releases](https://github.com/zapaincoffee/obs-mpv/releases) page.
+2. Extract or install to your OBS Studio plugins directory (usually `%ProgramData%\obs-studio\plugins`).
 
-## Quick Start
+### macOS
+1. Download the `.pkg` installer from the [Releases](https://github.com/zapaincoffee/obs-mpv/releases) page.
+2. Run the installer and follow the instructions.
 
-An absolute bare-bones [Quick Start Guide](https://github.com/obsproject/obs-plugintemplate/wiki/Quick-Start-Guide) is available in the wiki.
+### Linux
+1. Download the `.deb` package or the source tarball.
+2. Install via your package manager: `sudo apt install ./obs-mpv-source.deb`.
 
-## Documentation
+## Usage
 
-All documentation can be found in the [Plugin Template Wiki](https://github.com/obsproject/obs-plugintemplate/wiki).
+1. Open OBS Studio.
+2. Go to **View -> Docks -> MPV Controls & Playlist** to enable the control panel.
+3. Add a new **MPV Source** to your scene.
+4. Drag and drop files into the playlist dock and control playback from there.
+5. Check **"Auto Match OBS FPS"** in the dock if you want OBS to synchronize its frame rate with your media.
 
-Suggested reading to get up and running:
+## Building from Source
 
-* [Getting started](https://github.com/obsproject/obs-plugintemplate/wiki/Getting-Started)
-* [Build system requirements](https://github.com/obsproject/obs-plugintemplate/wiki/Build-System-Requirements)
-* [Build system options](https://github.com/obsproject/obs-plugintemplate/wiki/CMake-Build-System-Options)
+### Prerequisites
+*   CMake (3.28+)
+*   Qt 5 or Qt 6
+*   libmpv development files
+*   libobs development files
 
-## GitHub Actions & CI
+### Steps
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+sudo cmake --install build
+```
 
-Default GitHub Actions workflows are available for the following repository actions:
-
-* `push`: Run for commits or tags pushed to `master` or `main` branches.
-* `pr-pull`: Run when a Pull Request has been pushed or synchronized.
-* `dispatch`: Run when triggered by the workflow dispatch in GitHub's user interface.
-* `build-project`: Builds the actual project and is triggered by other workflows.
-* `check-format`: Checks CMake and plugin source code formatting and is triggered by other workflows.
-
-The workflows make use of GitHub repository actions (contained in `.github/actions`) and build scripts (contained in `.github/scripts`) which are not needed for local development, but might need to be adjusted if additional/different steps are required to build the plugin.
-
-### Retrieving build artifacts
-
-Successful builds on GitHub Actions will produce build artifacts that can be downloaded for testing. These artifacts are commonly simple archives and will not contain package installers or installation programs.
-
-### Building a Release
-
-To create a release, an appropriately named tag needs to be pushed to the `main`/`master` branch using semantic versioning (e.g., `12.3.4`, `23.4.5-beta2`). A draft release will be created on the associated repository with generated installer packages or installation programs attached as release artifacts.
-
-## Signing and Notarizing on macOS
-
-Basic concepts of codesigning and notarization on macOS are explained in the correspodning [Wiki article](https://github.com/obsproject/obs-plugintemplate/wiki/Codesigning-On-macOS) which has a specific section for the [GitHub Actions setup](https://github.com/obsproject/obs-plugintemplate/wiki/Codesigning-On-macOS#setting-up-code-signing-for-github-actions).
+## License
+GNU General Public License v2.0 or later.
