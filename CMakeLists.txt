@@ -68,6 +68,7 @@ endif()
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE ${PLUGIN_SOURCES})
 
 if(WIN32)
+  set(CMAKE_FIND_LIBRARY_SUFFIXES ".lib" ".dll" ".dll.a")
   set(MPV_PATH "${CMAKE_CURRENT_SOURCE_DIR}/libmpv")
   find_path(
     MPV_INCLUDE_DIR mpv/client.h

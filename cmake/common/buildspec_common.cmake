@@ -223,5 +223,14 @@ function(_check_dependencies)
 
   set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} CACHE PATH "CMake prefix search path" FORCE)
 
+  if(OS_MACOS)
+    # Patch obs-studio to enable OBJC/OBJCXX for libobs-metal target
+    file(READ "${dependencies_dir}/${_obs_destination}/CMakeLists.txt" _obs_cmakelists)
+    if(NOT _obs_cmakelists MATCHES "enable_language\\(OBJC OBJCXX\\)")
+      file(APPEND "${dependencies_dir}/${_obs_destination}/CMakeLists.txt" "\nif(APPLE)\n  enable_language(OBJC OBJCXX)\nendif()\n")
+      message(STATUS "Patched obs-studio CMakeLists.txt to enable OBJC/OBJCXX")
+    endif()
+  endif()
+
   _setup_obs_studio()
 endfunction()
