@@ -53,9 +53,19 @@ function Build {
     # curl -L is much better at SourceForge redirects than Invoke-WebRequest
     & curl.exe -L -o $MpvZip $MpvUrl
     
+    if (-not (Test-Path $MpvZip)) {
+        Write-Error "Failed to download libmpv. File not found: $MpvZip"
+        exit 1
+    }
+    
+    $zipItem = Get-Item $MpvZip
+    Write-Host "Downloaded libmpv size: $($zipItem.Length) bytes"
+
     Log-Group "Extracting libmpv..."
     if (-not (Test-Path $MpvDir)) { New-Item -ItemType Directory -Path $MpvDir | Out-Null }
-    & 7z x $MpvZip -o"$MpvDir" -y | Out-Null
+    
+    # Run 7z without suppressing output
+    & 7z x $MpvZip -o"$MpvDir" -y
     
     Log-Group "Debugging libmpv content..."
     Get-ChildItem -Path $MpvDir -Recurse | Select-Object FullName

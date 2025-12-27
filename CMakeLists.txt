@@ -78,6 +78,8 @@ if(WIN32)
     NAMES mpv libmpv mpv-2 libmpv-2
     HINTS ${MPV_PATH}
   )
+  message(STATUS "Windows MPV_INCLUDE_DIR: ${MPV_INCLUDE_DIR}")
+  message(STATUS "Windows MPV_LIBRARY: ${MPV_LIBRARY}")
   target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${MPV_INCLUDE_DIR})
   target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${MPV_LIBRARY})
 else()
