@@ -21,27 +21,26 @@
 
 #define S_FILE_PATH "file_path"
 
-extern "C" struct obs_source_info mpv_source_info = {
+struct obs_source_info mpv_source_info = {
     .id = "mpv_source",
     .type = OBS_SOURCE_TYPE_INPUT,
     .output_flags = OBS_SOURCE_VIDEO | OBS_SOURCE_AUDIO | OBS_SOURCE_ASYNC_VIDEO | OBS_SOURCE_CONTROLLABLE_MEDIA,
     .get_name = ObsMpvSource::obs_get_name,
     .create = ObsMpvSource::obs_create,
     .destroy = ObsMpvSource::obs_destroy,
+    .get_width = ObsMpvSource::obs_get_width,
+    .get_height = ObsMpvSource::obs_get_height,
     .get_properties = ObsMpvSource::obs_get_properties,
     .update = ObsMpvSource::obs_properties_update,
     .save = ObsMpvSource::obs_save,
-    .get_width = ObsMpvSource::obs_get_width,
-    .get_height = ObsMpvSource::obs_get_height,
     .video_tick = ObsMpvSource::obs_video_tick,
+    .media_get_state = ObsMpvSource::obs_media_get_state,
     .media_play_pause = ObsMpvSource::obs_media_play_pause,
     .media_stop = ObsMpvSource::obs_media_stop,
     .media_get_duration = ObsMpvSource::obs_media_get_duration,
     .media_get_time = ObsMpvSource::obs_media_get_time,
     .media_set_time = ObsMpvSource::obs_media_set_time,
-    .media_get_state = ObsMpvSource::obs_media_get_state,
 };
-
 const char *ObsMpvSource::obs_get_name(void*) { return "MPV Source"; }
 
 void *ObsMpvSource::obs_create(obs_data_t *settings, obs_source_t *source) {

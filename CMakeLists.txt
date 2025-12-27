@@ -30,8 +30,10 @@ if(ENABLE_QT)
     find_package(Qt5 COMPONENTS Widgets Core REQUIRED)
     target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE Qt5::Core Qt5::Widgets)
     target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE -DQT_VERSION=5)
-    # Qt5 requires C++17 at least for some features, but project sets standard elsewhere
   endif()
+  
+  # Crucial for finding <QtWidgets/...> on some platforms
+  target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${Qt6Widgets_INCLUDE_DIRS} ${Qt5Widgets_INCLUDE_DIRS})
   
   target_compile_options(
     ${CMAKE_PROJECT_NAME}
