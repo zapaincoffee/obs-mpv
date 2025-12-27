@@ -32,14 +32,14 @@ struct obs_source_info mpv_source_info = {
     .get_height = ObsMpvSource::obs_get_height,
     .get_properties = ObsMpvSource::obs_get_properties,
     .update = ObsMpvSource::obs_properties_update,
-    .save = ObsMpvSource::obs_save,
     .video_tick = ObsMpvSource::obs_video_tick,
-    .media_get_state = ObsMpvSource::obs_media_get_state,
+    .save = ObsMpvSource::obs_save,
     .media_play_pause = ObsMpvSource::obs_media_play_pause,
     .media_stop = ObsMpvSource::obs_media_stop,
     .media_get_duration = ObsMpvSource::obs_media_get_duration,
     .media_get_time = ObsMpvSource::obs_media_get_time,
     .media_set_time = ObsMpvSource::obs_media_set_time,
+    .media_get_state = ObsMpvSource::obs_media_get_state,
 };
 const char *ObsMpvSource::obs_get_name(void*) { return "MPV Source"; }
 

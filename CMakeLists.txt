@@ -33,7 +33,18 @@ if(ENABLE_QT)
   endif()
   
   # Crucial for finding <QtWidgets/...> on some platforms
-  target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${Qt6Widgets_INCLUDE_DIRS} ${Qt5Widgets_INCLUDE_DIRS})
+  target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE 
+    ${Qt6Widgets_INCLUDE_DIRS} ${Qt5Widgets_INCLUDE_DIRS}
+    ${Qt6Core_INCLUDE_DIRS} ${Qt5Core_INCLUDE_DIRS}
+  )
+  
+  if(APPLE)
+     # macOS often needs these for headers like <QtWidgets/QDockWidget>
+     target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE 
+       ${Qt6Widgets_INCLUDE_DIRS}/QtWidgets
+       ${Qt5Widgets_INCLUDE_DIRS}/QtWidgets
+     )
+  endif()
   
   target_compile_options(
     ${CMAKE_PROJECT_NAME}
