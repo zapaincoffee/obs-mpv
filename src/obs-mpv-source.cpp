@@ -236,132 +236,115 @@ ObsMpvSource::~ObsMpvSource() {
 }
 
 void ObsMpvSource::audio_thread_func() {
-		// On Windows, we already created the pipe. Wait for client (MPV) to connect.
-		if (m_pipe_handle == INVALID_HANDLE_VALUE) return;
-	
-		BOOL connected = ConnectNamedPipe(m_pipe_handle, NULL) ? TRUE : (GetLastError() == ERROR_PIPE_CONNECTED);
-	
-		auto throttle_start_time = std::chrono::steady_clock::now();
-	
-		while (!m_stop_audio_thread && connected) {
-			if (m_flush_audio_buffer) {
-				// Set a short timeout to drain the pipe without blocking forever
-				COMMTIMEOUTS timeouts = {0};
-				timeouts.ReadIntervalTimeout = MAXDWORD;
-				timeouts.ReadTotalTimeoutConstant = 1; // 1ms timeout for reads
-				timeouts.ReadTotalTimeoutMultiplier = 0;
-				SetCommTimeouts(m_pipe_handle, &timeouts);
-	
-				DWORD bytes_read_drain = 0;
-				while (ReadFile(m_pipe_handle, buf.data(), (DWORD)chunk_size, &bytes_read_drain, NULL) && bytes_read_drain > 0);
-				m_flush_audio_buffer = false;
-	
-				// Restore original pipe mode (blocking)
-				timeouts.ReadTotalTimeoutConstant = 0; // Blocking read
-				SetCommTimeouts(m_pipe_handle, &timeouts);
+	const size_t chunk_size = 4096;
+	std::vector<uint8_t> buf(chunk_size);
+	auto throttle_start_time = std::chrono::steady_clock::now();
+
+#ifdef _WIN32
+	if (m_pipe_handle == INVALID_HANDLE_VALUE) return;
+	BOOL connected = ConnectNamedPipe(m_pipe_handle, NULL) ? TRUE : (GetLastError() == ERROR_PIPE_CONNECTED);
+
+	while (!m_stop_audio_thread && connected) {
+		if (m_flush_audio_buffer) {
+			COMMTIMEOUTS timeouts = {0};
+			timeouts.ReadIntervalTimeout = MAXDWORD;
+			timeouts.ReadTotalTimeoutConstant = 1;
+			timeouts.ReadTotalTimeoutMultiplier = 0;
+			SetCommTimeouts(m_pipe_handle, &timeouts);
+
+			DWORD bytes_read_drain = 0;
+			while (ReadFile(m_pipe_handle, buf.data(), (DWORD)chunk_size, &bytes_read_drain, NULL) && bytes_read_drain > 0);
+			m_flush_audio_buffer = false;
+
+			timeouts.ReadTotalTimeoutConstant = 0;
+			SetCommTimeouts(m_pipe_handle, &timeouts);
+		}
+
+		DWORD bytes_read = 0;
+		BOOL success = ReadFile(m_pipe_handle, buf.data(), (DWORD)chunk_size, &bytes_read, NULL);
+
+		if (success && bytes_read > 0) {
+			if (!m_av_sync_started) continue;
+
+			if (m_total_audio_frames == 0) {
+				throttle_start_time = std::chrono::steady_clock::now();
 			}
-	
-			DWORD bytes_read = 0;
-			BOOL success = ReadFile(m_pipe_handle, buf.data(), (DWORD)chunk_size, &bytes_read, NULL);
-	
-					if (success && bytes_read > 0) {
-						if (!m_av_sync_started) {
-							continue;
-						}
-			
-						if (m_total_audio_frames == 0) {
-							throttle_start_time = std::chrono::steady_clock::now();
-						}
-			
-						uint32_t frames = (uint32_t)(bytes_read / sizeof(float) / 2);
-			
-						struct obs_source_audio audio = {};
-						audio.samples_per_sec = m_sample_rate;
-						audio.speakers = SPEAKERS_STEREO;
-						audio.format = AUDIO_FORMAT_FLOAT;
-						audio.data[0] = buf.data();
-						audio.frames = frames;
-			
-						audio.timestamp = m_audio_start_ts + util_mul_div64(m_total_audio_frames, 1000000000ULL, m_sample_rate);
-			
-						m_total_audio_frames += frames;
-			
-						obs_source_output_audio(m_source, &audio);
-			
-						// Throttle playback speed
-						if (m_sample_rate > 0) {
-							int64_t total_duration_us = (int64_t)(m_total_audio_frames * 1000000.0 / m_sample_rate);
-							auto next_wake = throttle_start_time + std::chrono::microseconds(total_duration_us);
-							std::this_thread::sleep_until(next_wake);
-						}
-						#else				int fd = open(m_fifo_path.c_str(), O_RDONLY | O_NONBLOCK);
-				// On Linux/macOS, open with O_NONBLOCK might return -1 if writer is not yet open.
-				// Ideally we should poll or loop open. For now, let's just loop with sleep until open.
-				int retries = 50;
-				while (fd < 0 && !m_stop_audio_thread && retries-- > 0) {
-					fd = open(m_fifo_path.c_str(), O_RDONLY | O_NONBLOCK);
-					std::this_thread::sleep_for(std::chrono::milliseconds(100));
-				}
-				if (fd < 0) return;
-	
-				auto throttle_start_time = std::chrono::steady_clock::now();
-	
-				while (!m_stop_audio_thread) {
-					if (m_flush_audio_buffer) {
-						// Drain the non-blocking pipe
-						while (read(fd, buf.data(), chunk_size) > 0);
-						m_flush_audio_buffer = false;
-					}
-	
-					ssize_t bytes_read = read(fd, buf.data(), chunk_size);
-					if (bytes_read > 0) {
-						#endif
-						if (!m_av_sync_started) {
-							// Discard audio until the first video frame is rendered
-							continue;
-						}
-						
-						if (m_total_audio_frames == 0) {
-							throttle_start_time = std::chrono::steady_clock::now();
-						}
-	
-						uint32_t frames = (uint32_t)(bytes_read / sizeof(float) / 2);
-	
-						struct obs_source_audio audio = {};
-						audio.samples_per_sec = m_sample_rate;
-						audio.speakers = SPEAKERS_STEREO;
-						audio.format = AUDIO_FORMAT_FLOAT;
-						audio.data[0] = buf.data();
-						audio.frames = frames;
-	
-						audio.timestamp = m_audio_start_ts + util_mul_div64(m_total_audio_frames, 1000000000ULL, m_sample_rate);
-						
-						if (m_total_audio_frames == 0) {
-							blog(LOG_INFO, "First audio frame TS: %" PRIu64, audio.timestamp);
-						}
-	
-						m_total_audio_frames += frames;
-	
-						obs_source_output_audio(m_source, &audio);
-	
-						// Throttle playback speed
-						if (m_sample_rate > 0) {
-							int64_t total_duration_us = (int64_t)(m_total_audio_frames * 1000000.0 / m_sample_rate);
-							auto next_wake = throttle_start_time + std::chrono::microseconds(total_duration_us);
-							std::this_thread::sleep_until(next_wake);
-						}
-	
-					} else {
-						std::this_thread::sleep_for(std::chrono::milliseconds(5));
-					}
-				}
-	
-				#ifdef _WIN32
-				DisconnectNamedPipe(m_pipe_handle);
-				#else
-				close(fd);
-				#endif
+
+			uint32_t frames = (uint32_t)(bytes_read / sizeof(float) / 2);
+			struct obs_source_audio audio = {};
+			audio.samples_per_sec = m_sample_rate;
+			audio.speakers = SPEAKERS_STEREO;
+			audio.format = AUDIO_FORMAT_FLOAT;
+			audio.data[0] = buf.data();
+			audio.frames = frames;
+			audio.timestamp = m_audio_start_ts + util_mul_div64(m_total_audio_frames, 1000000000ULL, m_sample_rate);
+
+			if (m_total_audio_frames == 0) {
+				blog(LOG_INFO, "First audio frame TS: %" PRIu64, audio.timestamp);
 			}
+
+			m_total_audio_frames += frames;
+			obs_source_output_audio(m_source, &audio);
+
+			if (m_sample_rate > 0) {
+				int64_t total_duration_us = (int64_t)(m_total_audio_frames * 1000000.0 / m_sample_rate);
+				auto next_wake = throttle_start_time + std::chrono::microseconds(total_duration_us);
+				std::this_thread::sleep_until(next_wake);
+			}
+		}
+	}
+	DisconnectNamedPipe(m_pipe_handle);
+#else
+	int fd = open(m_fifo_path.c_str(), O_RDONLY | O_NONBLOCK);
+	int retries = 50;
+	while (fd < 0 && !m_stop_audio_thread && retries-- > 0) {
+		fd = open(m_fifo_path.c_str(), O_RDONLY | O_NONBLOCK);
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	}
+	if (fd < 0) return;
+
+	while (!m_stop_audio_thread) {
+		if (m_flush_audio_buffer) {
+			while (read(fd, buf.data(), chunk_size) > 0);
+			m_flush_audio_buffer = false;
+		}
+
+		ssize_t bytes_read = read(fd, buf.data(), chunk_size);
+		if (bytes_read > 0) {
+			if (!m_av_sync_started) continue;
+
+			if (m_total_audio_frames == 0) {
+				throttle_start_time = std::chrono::steady_clock::now();
+			}
+
+			uint32_t frames = (uint32_t)(bytes_read / sizeof(float) / 2);
+			struct obs_source_audio audio = {};
+			audio.samples_per_sec = m_sample_rate;
+			audio.speakers = SPEAKERS_STEREO;
+			audio.format = AUDIO_FORMAT_FLOAT;
+			audio.data[0] = buf.data();
+			audio.frames = frames;
+			audio.timestamp = m_audio_start_ts + util_mul_div64(m_total_audio_frames, 1000000000ULL, m_sample_rate);
+
+			if (m_total_audio_frames == 0) {
+				blog(LOG_INFO, "First audio frame TS: %" PRIu64, audio.timestamp);
+			}
+
+			m_total_audio_frames += frames;
+			obs_source_output_audio(m_source, &audio);
+
+			if (m_sample_rate > 0) {
+				int64_t total_duration_us = (int64_t)(m_total_audio_frames * 1000000.0 / m_sample_rate);
+				auto next_wake = throttle_start_time + std::chrono::microseconds(total_duration_us);
+				std::this_thread::sleep_until(next_wake);
+			}
+		} else {
+			std::this_thread::sleep_for(std::chrono::milliseconds(5));
+		}
+	}
+	close(fd);
+#endif
+}
 			void ObsMpvSource::handle_mpv_events() {
 			bool tracks_changed = false;
 			while (m_mpv) {
