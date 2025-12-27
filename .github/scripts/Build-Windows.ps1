@@ -57,6 +57,9 @@ function Build {
     if (-not (Test-Path $MpvDir)) { New-Item -ItemType Directory -Path $MpvDir | Out-Null }
     & 7z x $MpvZip -o"$MpvDir" -y | Out-Null
     
+    Log-Group "Debugging libmpv content..."
+    Get-ChildItem -Path $MpvDir -Recurse | Select-Object FullName
+    
     # Configure CMake with MPV path
     $env:MPV_INCLUDE_DIRS = "$MpvDir\include"
     $env:MPV_LIBRARY_DIRS = "$MpvDir"
