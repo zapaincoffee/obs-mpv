@@ -44,6 +44,24 @@ function Build {
         . $Utility.FullName
     }
 
+    # Download libmpv dev files
+    $MpvUrl = "https://sourceforge.net/projects/mpv-player-windows/files/libmpv/mpv-dev-x86_64-20240407-git-6774960.7z/download"
+    $MpvZip = "$env:TEMP\mpv-dev.7z"
+    $MpvDir = "$ProjectRoot\mpv-dev"
+    
+    Log-Group "Downloading libmpv..."
+    Invoke-WebRequest -Uri $MpvUrl -OutFile $MpvZip -UserAgent "NativeHost"
+    
+    Log-Group "Extracting libmpv..."
+    if (-not (Test-Path $MpvDir)) { New-Item -ItemType Directory -Path $MpvDir | Out-Null }
+    7z x $MpvZip -o"$MpvDir" -y
+    
+    # Configure CMake with MPV path
+    $env:MPV_INCLUDE_DIRS = "$MpvDir\include"
+    $env:MPV_LIBRARY_DIRS = "$MpvDir"
+    # For some reason find_package might need help finding the lib
+    $env:CMAKE_PREFIX_PATH = "$MpvDir"
+
     Push-Location -Stack BuildTemp
     Ensure-Location $ProjectRoot
 

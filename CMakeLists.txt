@@ -22,8 +22,17 @@ if(ENABLE_FRONTEND_API)
 endif()
 
 if(ENABLE_QT)
-  find_package(Qt6 COMPONENTS Widgets Core)
-  target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE Qt6::Core Qt6::Widgets)
+  find_package(Qt6 COMPONENTS Widgets Core QUIET)
+  if(Qt6_FOUND)
+    target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE Qt6::Core Qt6::Widgets)
+    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE -DQT_VERSION=6)
+  else()
+    find_package(Qt5 COMPONENTS Widgets Core REQUIRED)
+    target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE Qt5::Core Qt5::Widgets)
+    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE -DQT_VERSION=5)
+    # Qt5 requires C++17 at least for some features, but project sets standard elsewhere
+  endif()
+  
   target_compile_options(
     ${CMAKE_PROJECT_NAME}
     PRIVATE $<$<C_COMPILER_ID:Clang,AppleClang>:-Wno-quoted-include-in-framework-header -Wno-comma>
@@ -34,7 +43,7 @@ if(ENABLE_QT)
   )
 endif()
 
-target_sources(${CMAKE_PROJECT_NAME} PRIVATE src/plugin-main.cpp src/obs-mpv-source.cpp src/mpv-dock.cpp src/mpv-sub-dialog.cpp)
+target_sources(${CMAKE_PROJECT_NAME} PRIVATE src/plugin-main.cpp src/obs-mpv-source.cpp src/mpv-dock.cpp src/mpv-sub-dialog.cpp src/playlist-table-widget.cpp)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(MPV REQUIRED mpv)

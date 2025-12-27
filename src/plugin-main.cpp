@@ -18,8 +18,15 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 
 #include <obs-module.h>
 #include <plugin-support.h>
-#include <obs-frontend-api.h>
 #include "mpv-dock.hpp"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+#include <obs-frontend-api.h>
+#ifdef __cplusplus
+}
+#endif
 
 OBS_DECLARE_MODULE()
 OBS_MODULE_USE_DEFAULT_LOCALE(PLUGIN_NAME, "en-US")
@@ -30,8 +37,8 @@ bool obs_module_load(void)
 {
 	obs_register_source(&mpv_source_info);
     
-    // Register Dock
-    obs_frontend_add_custom_qdock("mpv_controls", new MpvControlDock());
+    // Register Dock using correct API
+    obs_frontend_add_dock_by_id("mpv_controls", "MPV Controls & Playlist", new MpvControlDock());
     
 	obs_log(LOG_INFO, "plugin loaded successfully (version %s)", PLUGIN_VERSION);
 	return true;

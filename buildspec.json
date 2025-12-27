@@ -38,7 +38,7 @@
     },
     "name": "obs-mpv-source",
     "displayName": "MPV Source",
-    "version": "0.0.1",
+    "version": "0.0.9",
     "author": "Gemini",
     "website": "https://github.com/obsproject/obs-studio",
     "email": ""
