@@ -37,7 +37,7 @@ MpvControlDock::MpvControlDock(QWidget *parent) : QDockWidget(parent), m_current
 	m_comboSources = new QComboBox(content);
 	sourceLayout->addWidget(m_comboSources);
 	layout->addLayout(sourceLayout);
-	
+
 	// Version Label
 	QLabel *lblVersion = new QLabel(QString("v%1").arg(PLUGIN_VERSION), content);
 	lblVersion->setAlignment(Qt::AlignRight);
@@ -76,7 +76,7 @@ MpvControlDock::MpvControlDock(QWidget *parent) : QDockWidget(parent), m_current
 	m_comboSubs = new QComboBox(content);
 	m_spinLoop = new QSpinBox(content);
 	m_spinLoop->setRange(-1, 99);
-	
+
 	// Fade In Row
 	QHBoxLayout *fadeInLayout = new QHBoxLayout();
 	m_checkFadeIn = new QCheckBox("Fade In:", content);
@@ -87,7 +87,7 @@ MpvControlDock::MpvControlDock(QWidget *parent) : QDockWidget(parent), m_current
 	m_spinFadeIn->setEnabled(false);
 	fadeInLayout->addWidget(m_checkFadeIn);
 	fadeInLayout->addWidget(m_spinFadeIn);
-	
+
 	// Fade Out Row
 	QHBoxLayout *fadeOutLayout = new QHBoxLayout();
 	m_checkFadeOut = new QCheckBox("Fade Out:", content);
@@ -104,7 +104,7 @@ MpvControlDock::MpvControlDock(QWidget *parent) : QDockWidget(parent), m_current
 	form->addRow("Loop Count:", m_spinLoop);
 	form->addRow(fadeInLayout);
 	form->addRow(fadeOutLayout);
-	
+
 	m_checkAutoFPS = new QCheckBox("Auto Match OBS FPS", content);
 	form->addRow(m_checkAutoFPS);
 
@@ -175,7 +175,7 @@ MpvControlDock::MpvControlDock(QWidget *parent) : QDockWidget(parent), m_current
 	connect(m_spinFadeIn, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &MpvControlDock::onFadeInChanged);
 	connect(m_checkFadeOut, &QCheckBox::toggled, this, &MpvControlDock::onFadeOutToggled);
 	connect(m_spinFadeOut, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &MpvControlDock::onFadeOutChanged);
-	
+
 	connect(m_checkAutoFPS, &QCheckBox::toggled, [this](bool checked){
 		ObsMpvSource *source = getCurrentMpvSource();
 		if (source) {
@@ -223,7 +223,7 @@ void MpvControlDock::updateSourceList() {
 	std::vector<SourceInfo> sources;
 	obs_enum_sources([](void *d, obs_source_t *s) -> bool {
 		if (strcmp(obs_source_get_id(s), "mpv_source") == 0)
-			static_cast<std::vector<SourceInfo>*>(d)->push_back({obs_source_get_name(s), s});
+		static_cast<std::vector<SourceInfo>*>(d)->push_back({obs_source_get_name(s), s});
 		return true;
 	}, &sources);
 
@@ -269,7 +269,7 @@ void MpvControlDock::updateUiFromSource() {
 		int64_t d = obs_source_media_get_duration(m_currentSource);
 		if (d > 0) m_sliderSeek->setValue((int)((double)t / d * 1000.0));
 	}
-	
+
 	// Update Play Button text
 	ObsMpvSource *source = getCurrentMpvSource();
 	if (source) {
@@ -286,13 +286,13 @@ void MpvControlDock::updateUiFromSource() {
 
 	obs_data_t *s = obs_source_get_settings(m_currentSource);
 	if (!s) return;
-	
+
 	if (!m_sliderVolume->isSliderDown()) {
 		m_sliderVolume->blockSignals(true);
 		m_sliderVolume->setValue((int)obs_data_get_double(s, "volume"));
 		m_sliderVolume->blockSignals(false);
 	}
-	
+
 	m_checkAutoFPS->blockSignals(true);
 	m_checkAutoFPS->setChecked(obs_data_get_bool(s, "auto_obs_fps"));
 	m_checkAutoFPS->blockSignals(false);
@@ -316,14 +316,14 @@ void MpvControlDock::updateUiFromSource() {
 	};
 	parse("track_list_audio", m_comboAudio);
 	parse("track_list_sub", m_comboSubs);
-	
+
 	obs_data_release(s);
 }
 
 void MpvControlDock::onPlayClicked() {
 	ObsMpvSource *source = getCurrentMpvSource();
 	if (!source) return;
-	
+
 	int selectedRow = m_tablePlaylist->currentRow();
 	int currentPlayingIndex = -1;
 	// We need to access m_current_index, but it's private.
@@ -335,7 +335,7 @@ void MpvControlDock::onPlayClicked() {
 		source->playlist_play(selectedRow);
 		return;
 	}
-	
+
 	if (source->is_playing()) {
 		// Just pause if already playing
 		obs_source_media_play_pause(m_currentSource, true);
@@ -372,7 +372,7 @@ void MpvControlDock::onVolumeChanged(int v) {
 			item->volume = (double)v;
 		}
 	}
-	
+
 	// Also apply to currently playing source
 	obs_data_t *s = obs_source_get_settings(m_currentSource);
 	obs_data_set_double(s, "volume", (double)v);
@@ -392,7 +392,7 @@ void MpvControlDock::onAudioTrackChanged(int) {
 			item->audio_track = track_id;
 		}
 	}
-	
+
 	obs_data_t *s = obs_source_get_settings(m_currentSource);
 	obs_data_set_int(s, "audio_track", track_id);
 	obs_source_update(m_currentSource, s);
@@ -429,7 +429,7 @@ void MpvControlDock::onLoopCountChanged(int v) {
 			item->loop = (v != 0);
 		}
 	}
-	
+
 	obs_data_t *s = obs_source_get_settings(m_currentSource);
 	obs_data_set_int(s, "loop", v);
 	obs_source_update(m_currentSource, s);
@@ -523,7 +523,7 @@ void MpvControlDock::onAddFiles() {
 
 	QStringList files = QFileDialog::getOpenFileNames(this, "Add Media Files", "", "All Files (*.*)");
 	if (files.isEmpty()) return;
-	
+
 	std::vector<std::string> paths;
 	for (const QString &file : files) {
 		paths.push_back(file.toStdString());
@@ -581,7 +581,7 @@ void MpvControlDock::onItemClicked(QTableWidgetItem *item) {
 	m_sliderVolume->blockSignals(false);
 
 	m_spinLoop->blockSignals(true);
-	m_spinLoop->setValue(playlist_item->loop ? 1 : 0); 
+	m_spinLoop->setValue(playlist_item->loop ? 1 : 0);
 	m_spinLoop->blockSignals(false);
 
 	m_checkFadeIn->blockSignals(true);
@@ -638,7 +638,7 @@ void MpvControlDock::updatePlaylistTable() {
 		if (item) {
 			QString displayName = QString::fromStdString(item->name);
 			bool isCurrent = (i == source->m_current_index);
-			
+
 			if (isCurrent) {
 				if (source->is_playing()) displayName = "▶ " + displayName;
 				else displayName = "⏸ " + displayName;
@@ -646,23 +646,23 @@ void MpvControlDock::updatePlaylistTable() {
 
 			m_tablePlaylist->setItem(i, 0, createItem(displayName));
 			m_tablePlaylist->setItem(i, 1, createItem(formatTime(item->duration)));
-			
+
 			m_tablePlaylist->setItem(i, 2, createItem(item->fps > 0 ? QString::number(item->fps, 'f', 2) : ""));
 			m_tablePlaylist->setItem(i, 3, createItem(item->audio_channels > 0 ? QString::number(item->audio_channels) : ""));
-			
+
 			m_tablePlaylist->setItem(i, 4, createItem(item->loop ? "Yes" : "No"));
-			
+
 			QString subText = "No";
 			if (!item->ext_sub_path.empty()) subText = "External";
 			else if (!item->sub_tracks.empty()) subText = "Internal";
-			
+
 			m_tablePlaylist->setItem(i, 5, createItem(subText));
-			
+
 			if (isCurrent) {
 				QFont font = m_tablePlaylist->font();
 				font.setBold(true);
 				QColor activeColor(0, 120, 215, 60); // Semi-transparent blue
-				
+
 				for (int c = 0; c < 6; c++) {
 					QTableWidgetItem *cell = m_tablePlaylist->item(i, c);
 					if (cell) {
@@ -671,7 +671,7 @@ void MpvControlDock::updatePlaylistTable() {
 					}
 				}
 			}
-			
+
 			total_duration += item->duration;
 		}
 	}

@@ -5,8 +5,11 @@ include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/common/bootstrap.cmake" NO_POLICY_SCO
 project(${_name} VERSION ${_version})
 
 if(APPLE)
-  enable_language(Swift)
+  enable_language(Swift OBJC OBJCXX)
 endif()
+
+# Fix for Debian packaging
+set(CPACK_PACKAGE_CONTACT "Maintainer <maintainer@example.com>")
 
 option(ENABLE_FRONTEND_API "Use obs-frontend-api for UI functionality" ON)
 option(ENABLE_QT "Use Qt functionality" ON)
@@ -72,7 +75,7 @@ if(WIN32)
   )
   find_library(
     MPV_LIBRARY
-    NAMES mpv libmpv
+    NAMES mpv libmpv mpv-2 libmpv-2
     HINTS ${MPV_PATH}
   )
   target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${MPV_INCLUDE_DIR})

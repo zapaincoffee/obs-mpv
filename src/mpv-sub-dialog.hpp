@@ -10,7 +10,7 @@ public:
 	explicit MpvSubSettingsDialog(QWidget *parent = nullptr);
 	void setSource(obs_source_t *source);
 
-private slots:
+	private slots:
 	void onDelayChanged(double val);
 	void onScaleChanged(double val);
 	void onPosChanged(double val);
@@ -20,6 +20,6 @@ private:
 	QDoubleSpinBox *m_spinDelay;
 	QDoubleSpinBox *m_spinScale;
 	QDoubleSpinBox *m_spinPos;
-	
+
 	void updateSetting(const char *key, double val);
 };

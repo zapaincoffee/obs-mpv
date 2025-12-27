@@ -19,6 +19,6 @@ protected:
 
 private:
 	MpvControlDock *m_dock;
-	
+
 	void performInternalMove(int from, int to);
 };

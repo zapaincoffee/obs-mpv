@@ -36,7 +36,7 @@ void MpvSubSettingsDialog::setSource(obs_source_t *source) {
 	if (m_source) obs_source_release(m_source);
 	m_source = source;
 	if (m_source) obs_source_get_ref(m_source);
-	
+
 	// Ideally read current values here from settings, but defaults are ok for now
 }
 

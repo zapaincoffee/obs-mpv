@@ -9,7 +9,7 @@
 #include <QDrag>
 
 PlaylistTableWidget::PlaylistTableWidget(MpvControlDock *dock, QWidget *parent)
-	: QTableWidget(parent), m_dock(dock)
+: QTableWidget(parent), m_dock(dock)
 {
 	setAcceptDrops(true);
 	setDragDropMode(QAbstractItemView::InternalMove);
@@ -48,7 +48,7 @@ void PlaylistTableWidget::dropEvent(QDropEvent *event) {
 		int fromRow = selectionModel()->currentIndex().row();
 		int toRow = indexAt(event->position().toPoint()).row();
 		if (toRow == -1) toRow = rowCount() - 1;
-		
+
 		performInternalMove(fromRow, toRow);
 		event->accept();
 	}
@@ -65,7 +65,7 @@ void PlaylistTableWidget::startDrag(Qt::DropActions /*supportedActions*/) {
 void PlaylistTableWidget::performInternalMove(int from, int to) {
 	ObsMpvSource *source = m_dock->getCurrentMpvSource();
 	if (!source) return;
-	
+
 	if (from != to) {
 		source->playlist_move(from, to);
 		m_dock->updatePlaylistTable();
