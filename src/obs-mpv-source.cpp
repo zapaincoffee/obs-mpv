@@ -254,6 +254,9 @@ void ObsMpvSource::audio_thread_func() {
 
 			DWORD bytes_read_drain = 0;
 			while (ReadFile(m_pipe_handle, buf.data(), (DWORD)chunk_size, &bytes_read_drain, NULL) && bytes_read_drain > 0);
+			
+			std::lock_guard<std::mutex> lock(m_audio_mutex);
+			m_audio_queue.clear();
 			m_flush_audio_buffer = false;
 
 			timeouts.ReadTotalTimeoutConstant = 0;
@@ -264,32 +267,34 @@ void ObsMpvSource::audio_thread_func() {
 		BOOL success = ReadFile(m_pipe_handle, buf.data(), (DWORD)chunk_size, &bytes_read, NULL);
 
 		if (success && bytes_read > 0) {
-			if (!m_av_sync_started) continue;
+			std::lock_guard<std::mutex> lock(m_audio_mutex);
+			m_audio_queue.insert(m_audio_queue.end(), buf.begin(), buf.begin() + bytes_read);
+		}
+		
+		if (m_av_sync_started) {
+			std::lock_guard<std::mutex> lock(m_audio_mutex);
+			while (m_audio_queue.size() >= chunk_size) {
+				// Process in chunks
+				struct obs_source_audio audio = {};
+				audio.samples_per_sec = m_sample_rate;
+				audio.speakers = SPEAKERS_STEREO;
+				audio.format = AUDIO_FORMAT_FLOAT;
+				
+				// Extract chunk
+				std::vector<uint8_t> out_buf(m_audio_queue.begin(), m_audio_queue.begin() + chunk_size);
+				m_audio_queue.erase(m_audio_queue.begin(), m_audio_queue.begin() + chunk_size);
+				
+				uint32_t frames = (uint32_t)(chunk_size / sizeof(float) / 2);
+				audio.data[0] = out_buf.data();
+				audio.frames = frames;
+				audio.timestamp = m_audio_start_ts + util_mul_div64(m_total_audio_frames, 1000000000ULL, m_sample_rate);
 
-			if (m_total_audio_frames == 0) {
-				throttle_start_time = std::chrono::steady_clock::now();
-			}
+				if (m_total_audio_frames == 0) {
+					blog(LOG_INFO, "First audio frame sent to OBS. TS: %" PRIu64, audio.timestamp);
+				}
 
-			uint32_t frames = (uint32_t)(bytes_read / sizeof(float) / 2);
-			struct obs_source_audio audio = {};
-			audio.samples_per_sec = m_sample_rate;
-			audio.speakers = SPEAKERS_STEREO;
-			audio.format = AUDIO_FORMAT_FLOAT;
-			audio.data[0] = buf.data();
-			audio.frames = frames;
-			audio.timestamp = m_audio_start_ts + util_mul_div64(m_total_audio_frames, 1000000000ULL, m_sample_rate);
-
-			if (m_total_audio_frames == 0) {
-				blog(LOG_INFO, "First audio frame TS: %" PRIu64, audio.timestamp);
-			}
-
-			m_total_audio_frames += frames;
-			obs_source_output_audio(m_source, &audio);
-
-			if (m_sample_rate > 0) {
-				int64_t total_duration_us = (int64_t)(m_total_audio_frames * 1000000.0 / m_sample_rate);
-				auto next_wake = throttle_start_time + std::chrono::microseconds(total_duration_us);
-				std::this_thread::sleep_until(next_wake);
+				m_total_audio_frames += frames;
+				obs_source_output_audio(m_source, &audio);
 			}
 		}
 	}
@@ -306,40 +311,43 @@ void ObsMpvSource::audio_thread_func() {
 	while (!m_stop_audio_thread) {
 		if (m_flush_audio_buffer) {
 			while (read(fd, buf.data(), chunk_size) > 0);
+			std::lock_guard<std::mutex> lock(m_audio_mutex);
+			m_audio_queue.clear();
 			m_flush_audio_buffer = false;
 		}
 
 		ssize_t bytes_read = read(fd, buf.data(), chunk_size);
 		if (bytes_read > 0) {
-			if (!m_av_sync_started) continue;
-
-			if (m_total_audio_frames == 0) {
-				throttle_start_time = std::chrono::steady_clock::now();
-			}
-
-			uint32_t frames = (uint32_t)(bytes_read / sizeof(float) / 2);
-			struct obs_source_audio audio = {};
-			audio.samples_per_sec = m_sample_rate;
-			audio.speakers = SPEAKERS_STEREO;
-			audio.format = AUDIO_FORMAT_FLOAT;
-			audio.data[0] = buf.data();
-			audio.frames = frames;
-			audio.timestamp = m_audio_start_ts + util_mul_div64(m_total_audio_frames, 1000000000ULL, m_sample_rate);
-
-			if (m_total_audio_frames == 0) {
-				blog(LOG_INFO, "First audio frame TS: %" PRIu64, audio.timestamp);
-			}
-
-			m_total_audio_frames += frames;
-			obs_source_output_audio(m_source, &audio);
-
-			if (m_sample_rate > 0) {
-				int64_t total_duration_us = (int64_t)(m_total_audio_frames * 1000000.0 / m_sample_rate);
-				auto next_wake = throttle_start_time + std::chrono::microseconds(total_duration_us);
-				std::this_thread::sleep_until(next_wake);
-			}
+			std::lock_guard<std::mutex> lock(m_audio_mutex);
+			m_audio_queue.insert(m_audio_queue.end(), buf.begin(), buf.begin() + bytes_read);
 		} else {
 			std::this_thread::sleep_for(std::chrono::milliseconds(5));
+		}
+
+		if (m_av_sync_started) {
+			std::lock_guard<std::mutex> lock(m_audio_mutex);
+			// Process whatever we have, or at least chunks
+			while (m_audio_queue.size() >= chunk_size) {
+				struct obs_source_audio audio = {};
+				audio.samples_per_sec = m_sample_rate;
+				audio.speakers = SPEAKERS_STEREO;
+				audio.format = AUDIO_FORMAT_FLOAT;
+				
+				std::vector<uint8_t> out_buf(m_audio_queue.begin(), m_audio_queue.begin() + chunk_size);
+				m_audio_queue.erase(m_audio_queue.begin(), m_audio_queue.begin() + chunk_size);
+				
+				uint32_t frames = (uint32_t)(chunk_size / sizeof(float) / 2);
+				audio.data[0] = out_buf.data();
+				audio.frames = frames;
+				audio.timestamp = m_audio_start_ts + util_mul_div64(m_total_audio_frames, 1000000000ULL, m_sample_rate);
+
+				if (m_total_audio_frames == 0) {
+					blog(LOG_INFO, "First audio frame sent to OBS. TS: %" PRIu64, audio.timestamp);
+				}
+
+				m_total_audio_frames += frames;
+				obs_source_output_audio(m_source, &audio);
+			}
 		}
 	}
 	close(fd);
