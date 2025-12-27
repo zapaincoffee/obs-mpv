@@ -61,6 +61,9 @@ function Build {
     $zipItem = Get-Item $MpvZip
     Write-Host "Downloaded libmpv size: $($zipItem.Length) bytes"
 
+    Log-Group "Inspecting libmpv archive..."
+    & 7z l $MpvZip
+
     Log-Group "Extracting libmpv..."
     if (-not (Test-Path $MpvDir)) { New-Item -ItemType Directory -Path $MpvDir | Out-Null }
     
@@ -68,13 +71,30 @@ function Build {
     & 7z x $MpvZip -o"$MpvDir" -y
     
     Log-Group "Debugging libmpv content..."
-    Get-ChildItem -Path $MpvDir -Recurse | Select-Object FullName
+    Get-ChildItem -Path $MpvDir
     
-    # Configure CMake with MPV path
-    $env:MPV_INCLUDE_DIRS = "$MpvDir\include"
-    $env:MPV_LIBRARY_DIRS = "$MpvDir"
-    # For some reason find_package might need help finding the lib
-    $env:CMAKE_PREFIX_PATH = "$MpvDir"
+    # Check if there is a single subdirectory (common in sourceforge releases)
+    $SubDir = Get-ChildItem -Path $MpvDir -Directory
+    if ($SubDir.Count -eq 1) {
+        $RealMpvDir = $SubDir.FullName
+        Write-Host "Detected subdirectory: $RealMpvDir"
+        # Move contents up or update MpvDir? Updating env vars is safer.
+        $env:MPV_INCLUDE_DIRS = "$RealMpvDir\include"
+        $env:MPV_LIBRARY_DIRS = "$RealMpvDir" # usually libs are in root of the package or 'lib'
+        
+        if (Test-Path "$RealMpvDir\lib") {
+             $env:MPV_LIBRARY_DIRS = "$RealMpvDir\lib"
+        }
+        
+        $env:CMAKE_PREFIX_PATH = "$RealMpvDir"
+    } else {
+        $env:MPV_INCLUDE_DIRS = "$MpvDir\include"
+        $env:MPV_LIBRARY_DIRS = "$MpvDir"
+        $env:CMAKE_PREFIX_PATH = "$MpvDir"
+    }
+    
+    Write-Host "MPV_INCLUDE_DIRS: $env:MPV_INCLUDE_DIRS"
+    Write-Host "MPV_LIBRARY_DIRS: $env:MPV_LIBRARY_DIRS"
 
     Push-Location -Stack BuildTemp
     Ensure-Location $ProjectRoot
