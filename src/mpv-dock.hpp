@@ -62,45 +62,65 @@ public:
 	void onSubColorClicked();
 
 private:
-	QComboBox *m_comboSources;
-	QSlider *m_sliderSeek;
-	QSlider *m_sliderVolume;
-	QPushButton *m_btnPlay;
-	QPushButton *m_btnStop;
+    QComboBox *m_comboSources;
+    QSlider *m_sliderSeek;
+    QSlider *m_sliderVolume;
+    
+    // Labels for Time
+    QLabel *m_lblTimeCurrent;
+    QLabel *m_lblTimeRemaining;
+    QLabel *m_lblPlaylistRemaining;
+    
+    // Buttons
+    QPushButton *m_btnPlay;
+    QPushButton *m_btnPause;
+    QPushButton *m_btnStop;
+    QPushButton *m_btnRestart;
+    
+    // Toggles
+    QCheckBox *m_checkFadePlay;
+    QPushButton *m_btnRestartFade;
 
-	QComboBox *m_comboAudio;
-	QComboBox *m_comboSubs;
+    QComboBox *m_comboAudio;
+    QComboBox *m_comboSubs;
 
-	QSpinBox *m_spinLoop;
-	QCheckBox *m_checkFadeIn;
-	QDoubleSpinBox *m_spinFadeIn;
-	QCheckBox *m_checkFadeOut;
-	QDoubleSpinBox *m_spinFadeOut;
+    QSpinBox *m_spinLoop;
+    QCheckBox *m_checkFadeIn;
+    QDoubleSpinBox *m_spinFadeIn;
+    QCheckBox *m_checkFadeOut;
+    QDoubleSpinBox *m_spinFadeOut;
 
-	QCheckBox *m_checkAutoFPS;
+    QCheckBox *m_checkAutoFPS;
 
-	QPushButton *m_btnLoadSubs;
-	QPushButton *m_btnSubSettings;
+    QPushButton *m_btnLoadSubs;
+    QPushButton *m_btnSubSettings;
 
-	// Playlist UI
-	PlaylistTableWidget *m_tablePlaylist;
-	QPushButton *m_btnAdd;
-	QPushButton *m_btnRemove;
-	QPushButton *m_btnUp;
-	QPushButton *m_btnDown;
-	QLabel *m_labelTotalDuration;
+    // Playlist UI
+    PlaylistTableWidget *m_table; // Using m_table to match implementation
+    QPushButton *m_btnAdd;
+    QPushButton *m_btnRemove;
+    QPushButton *m_btnUp;
+    QPushButton *m_btnDown;
+    QLabel *m_labelTotalDuration;
 
-	QTimer *m_timer;
-	obs_source_t *m_currentSource;
-	bool m_isSeeking;
-	uint32_t m_currentSubColor;
+    QTimer *m_timer;
+    obs_source_t *m_currentSource;
+    bool m_isSeeking;
+    uint32_t m_currentSubColor;
 
-	MpvSubSettingsDialog *m_subDialog;
+    MpvSubSettingsDialog *m_subDialog;
 
-	void updateUiFromSource();
-	void updateSourceList();
+    void updateUiFromSource();
+    void updateSourceList();
+    
+    // New slots
+    void onPauseClicked();
+    void onRestartClicked();
+    void onRestartFadeClicked();
+    void updateTimer();
+    void saveSettings(); // Generic saver
 
-	QString formatTime(double seconds);
-	double parseTime(const QString &text);
-	void populateTracks(QComboBox *combo, const char *type);
+    QString formatTime(double seconds);
+    double parseTime(const QString &text);
+    void populateTracks(QComboBox *combo, const char *type);
 };

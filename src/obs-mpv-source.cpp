@@ -197,14 +197,26 @@ ObsMpvSource::ObsMpvSource(obs_source_t *source, obs_data_t *settings) : m_sourc
 	mpv_set_option_string(m_mpv, "ao-pcm-format", "float");
 	
 	// Keep multi-channel support but set defaults
-	mpv_set_option_string(m_mpv, "audio-format", "float");
-	mpv_set_option_string(m_mpv, "keep-open", "yes");
-
-	mpv_initialize(m_mpv);
-
-	int adv = 1;
-	mpv_render_param p[] = {{MPV_RENDER_PARAM_API_TYPE, (void *)MPV_RENDER_API_TYPE_SW}, {MPV_RENDER_PARAM_ADVANCED_CONTROL, &adv}, {MPV_RENDER_PARAM_INVALID, nullptr}};
-	mpv_render_context_create(&m_mpv_render_ctx, m_mpv, p);
+	    mpv_set_option_string(m_mpv, "audio-format", "float");
+	    mpv_set_option_string(m_mpv, "keep-open", "yes");
+	
+	    mpv_initialize(m_mpv);
+	
+	    // Load Sub Settings
+	    m_sub_style.font = obs_data_get_string(settings, "sub_font");
+	    if (m_sub_style.font.empty()) m_sub_style.font = "Arial";
+	    m_sub_style.color = obs_data_get_string(settings, "sub_color");
+	    if (m_sub_style.color.empty()) m_sub_style.color = "#FFFFFF";
+	    m_sub_style.shadow_color = obs_data_get_string(settings, "sub_shadow_color");
+	    if (m_sub_style.shadow_color.empty()) m_sub_style.shadow_color = "#000000";
+	    m_sub_style.font_size = (int)obs_data_get_int(settings, "sub_font_size");
+	    if (m_sub_style.font_size <= 0) m_sub_style.font_size = 55;
+	    m_sub_style.shadow_offset = (int)obs_data_get_int(settings, "sub_shadow_offset");
+	    
+	    set_sub_style(m_sub_style);
+	
+	    int adv = 1;
+	    mpv_render_param p[] = {{MPV_RENDER_PARAM_API_TYPE, (void *)MPV_RENDER_API_TYPE_SW}, {MPV_RENDER_PARAM_ADVANCED_CONTROL, &adv}, {MPV_RENDER_PARAM_INVALID, nullptr}};	mpv_render_context_create(&m_mpv_render_ctx, m_mpv, p);
 
 	mpv_set_wakeup_callback(m_mpv, on_mpv_wakeup, this);
 	mpv_render_context_set_update_callback(m_mpv_render_ctx, on_mpv_render_update, this);
@@ -539,11 +551,24 @@ void ObsMpvSource::playlist_add_multiple(const std::vector<std::string>& paths) 
 		m_playlist.push_back(item);
 	}
 
-	mpv_terminate_destroy(probe_mpv);
-}
-
-void ObsMpvSource::playlist_remove(int index) {
-	if (index >= 0 && (size_t)index < m_playlist.size()) {
+	    mpv_terminate_destroy(probe_mpv);
+	}
+	
+	void ObsMpvSource::playlist_play_with_fade(int index, double fade_sec) {
+	    if (index >= 0 && (size_t)index < m_playlist.size()) {
+	        m_playlist[index].fade_in_enabled = true;
+	        m_playlist[index].fade_in = fade_sec;
+	        playlist_play(index);
+	    }
+	}
+	
+	void ObsMpvSource::playlist_restart_with_fade(double fade_sec) {
+	    if (m_current_index >= 0) {
+	        playlist_play_with_fade(m_current_index, fade_sec);
+	    }
+	}
+	
+	void ObsMpvSource::playlist_remove(int index) {	if (index >= 0 && (size_t)index < m_playlist.size()) {
 		m_playlist.erase(m_playlist.begin() + index);
 		if (index == m_current_index) {
 			stop();
@@ -658,29 +683,68 @@ void ObsMpvSource::stop() { mpv_command_string(m_mpv, "stop"); }
 void ObsMpvSource::seek(double s) { mpv_set_property(m_mpv, "time-pos", MPV_FORMAT_DOUBLE, &s); }
 double ObsMpvSource::get_time_pos() { double v=0; mpv_get_property(m_mpv, "time-pos", MPV_FORMAT_DOUBLE, &v); return v; }
 double ObsMpvSource::get_duration() { double v=0; mpv_get_property(m_mpv, "duration", MPV_FORMAT_DOUBLE, &v); return v; }
+
+double ObsMpvSource::get_time_remaining() {
+    double d = get_duration();
+    double p = get_time_pos();
+    return (d > p) ? d - p : 0.0;
+}
+
+double ObsMpvSource::get_playlist_remaining_time() {
+    double current_rem = get_time_remaining();
+    double following = 0.0;
+    if (m_current_index >= 0) {
+        for (size_t i = m_current_index + 1; i < m_playlist.size(); i++) {
+            following += m_playlist[i].duration;
+        }
+    }
+    return current_rem + following;
+}
+
+int ObsMpvSource::get_current_index() { return m_current_index; }
+
+void ObsMpvSource::set_sub_style(const SubStyle& style) {
+    m_sub_style = style;
+    mpv_set_option_string(m_mpv, "sub-font", style.font.c_str());
+    mpv_set_option_string(m_mpv, "sub-color", style.color.c_str());
+    mpv_set_option_string(m_mpv, "sub-shadow-color", style.shadow_color.c_str());
+    mpv_set_option_string(m_mpv, "sub-font-size", std::to_string(style.font_size).c_str());
+    mpv_set_option_string(m_mpv, "sub-shadow-offset", std::to_string(style.shadow_offset).c_str());
+    
+    // Save to OBS settings
+    obs_data_t *settings = obs_source_get_settings(m_source);
+    obs_data_set_string(settings, "sub_font", style.font.c_str());
+    obs_data_set_string(settings, "sub_color", style.color.c_str());
+    obs_data_set_string(settings, "sub_shadow_color", style.shadow_color.c_str());
+    obs_data_set_int(settings, "sub_font_size", style.font_size);
+    obs_data_set_int(settings, "sub_shadow_offset", style.shadow_offset);
+    obs_data_release(settings);
+}
+
+ObsMpvSource::SubStyle ObsMpvSource::get_sub_style() const { return m_sub_style; }
+
 double ObsMpvSource::get_volume() { double v=100; mpv_get_property(m_mpv, "volume", MPV_FORMAT_DOUBLE, &v); return v; }
 void ObsMpvSource::set_volume(double vol) { mpv_set_property(m_mpv, "volume", MPV_FORMAT_DOUBLE, &vol); }
 
 bool ObsMpvSource::is_playing() {
-	int p=1;
-	mpv_get_property(m_mpv, "pause", MPV_FORMAT_FLAG, &p);
-	return p==0 && !is_idle();
+    int p=1;
+    mpv_get_property(m_mpv, "pause", MPV_FORMAT_FLAG, &p);
+    return p==0 && !is_idle();
 }
 
 bool ObsMpvSource::is_paused(){
-	int p=0;
-	mpv_get_property(m_mpv, "pause", MPV_FORMAT_FLAG, &p);
-	return p==1 && !is_idle();
+    int p=0;
+    mpv_get_property(m_mpv, "pause", MPV_FORMAT_FLAG, &p);
+    return p==1 && !is_idle();
 }
 
 bool ObsMpvSource::is_idle(){
-	int idle=0;
-	mpv_get_property(m_mpv, "idle-active", MPV_FORMAT_FLAG, &idle);
-	return idle==1;
+    int idle=0;
+    mpv_get_property(m_mpv, "idle-active", MPV_FORMAT_FLAG, &idle);
+    return idle==1;
 }
 
-std::vector<ObsMpvSource::MpvTrack> ObsMpvSource::get_tracks(const char *type) {
-	std::vector<MpvTrack> res;
+std::vector<ObsMpvSource::MpvTrack> ObsMpvSource::get_tracks(const char *type) {	std::vector<MpvTrack> res;
 	mpv_node node;
 	if (mpv_get_property(m_mpv, "track-list", MPV_FORMAT_NODE, &node) == 0) {
 		if (node.format == MPV_FORMAT_NODE_ARRAY) {

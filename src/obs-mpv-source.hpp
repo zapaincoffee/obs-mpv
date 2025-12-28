@@ -54,6 +54,8 @@ public:
         std::string ext_sub_path;
         
         bool loop = false;
+        int loop_count = 0; // 0=once, -1=infinite, >0=specific count
+        
         bool fade_in_enabled = false;
         double fade_in = 0.0;
         bool fade_out_enabled = false;
@@ -69,6 +71,17 @@ public:
         double last_seek_pos = 0.0;
     };
 
+    // Subtitle Styling
+    struct SubStyle {
+        std::string font = "Arial";
+        std::string color = "#FFFFFF";
+        std::string shadow_color = "#000000";
+        int font_size = 55;
+        int shadow_offset = 2;
+    };
+    void set_sub_style(const SubStyle& style);
+    SubStyle get_sub_style() const;
+
     // Control methods accessible from Dock via settings
     void set_volume(double vol);
     double get_volume();
@@ -76,9 +89,14 @@ public:
     // Internal getters for state
     double get_time_pos();
     double get_duration();
+    double get_time_remaining();
+    double get_playlist_time_remaining();
+    
     bool is_playing();
     bool is_paused();
     bool is_idle();
+    int get_current_index();
+    
     std::vector<MpvTrack> get_tracks(const char *type);
     
     // Playlist Management
@@ -87,6 +105,8 @@ public:
     void playlist_remove(int index);
     void playlist_move(int from, int to);
     void playlist_play(int index);
+    void playlist_play_with_fade(int index, double fade_sec);
+    void playlist_restart_with_fade(double fade_sec);
     void playlist_next();
     PlaylistItem* playlist_get_item(int index);
     int playlist_count();
@@ -114,6 +134,7 @@ private:
     
     std::vector<PlaylistItem> m_playlist;
     int m_current_index = -1;
+    SubStyle m_sub_style;
     
     uint32_t m_width;
     uint32_t m_height;
