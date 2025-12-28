@@ -37,6 +37,8 @@ struct obs_source_info mpv_source_info = {
 	.get_height = ObsMpvSource::obs_get_height,
 	.get_properties = ObsMpvSource::obs_get_properties,
 	.update = ObsMpvSource::obs_properties_update,
+	.activate = ObsMpvSource::obs_activate,
+	.deactivate = ObsMpvSource::obs_deactivate,
 	.video_tick = ObsMpvSource::obs_video_tick,
 	.save = ObsMpvSource::obs_save,
 	.media_play_pause = ObsMpvSource::obs_media_play_pause,
@@ -59,44 +61,44 @@ obs_properties_t *ObsMpvSource::obs_get_properties(void *) {
 	return props;
 }
 
+void ObsMpvSource::obs_activate(void *data) {
+    auto self = static_cast<ObsMpvSource*>(data);
+    if (self->m_restart_on_activate) {
+        // Restart from beginning (first playlist item or beginning of current file)
+        // If playlist has multiple items, usually restart means go to index 0?
+        // Or just restart current item? Standard Media Source restarts the file.
+        // Let's assume restart playlist from index 0 for consistency with "Show Restart" button in dock.
+        if (self->playlist_count() > 0) {
+             self->playlist_play(0);
+        } else {
+             self->seek(0);
+             self->play();
+        }
+    } else {
+        // Just resume if it was paused/stopped? 
+        // Or do nothing?
+        // Standard OBS behavior is "Close file when inactive" vs "Remember position".
+        // Here we keep mpv instance alive.
+        // If we want it to "Play", we should check if it was playing.
+        // But usually, activate means "Resume".
+        // Let's ensure it plays if it's not explicitly stopped/paused by user?
+        // Actually, let's keep it simple: if not restarting, just unpause if it was paused by deactivate.
+        self->play();
+    }
+}
+
+void ObsMpvSource::obs_deactivate(void *data) {
+    auto self = static_cast<ObsMpvSource*>(data);
+    if (self->m_pause_on_deactivate) {
+        self->pause();
+    }
+}
+
 void ObsMpvSource::obs_properties_update(void *data, obs_data_t *settings) {
-	auto self = static_cast<ObsMpvSource *>(data);
-	if (!self->m_mpv || self->m_current_index < 0 || (size_t)self->m_current_index >= self->m_playlist.size()) return;
-
-	auto& item = self->m_playlist[self->m_current_index];
-
-	// Save settings to the playlist item
-	item.audio_track = (int)obs_data_get_int(settings, "audio_track");
-	item.sub_track = (int)obs_data_get_int(settings, "subtitle_track");
-	item.loop = (int)obs_data_get_int(settings, "loop") != 0;
-	item.volume = obs_data_get_double(settings, "volume");
-
-	// Apply settings immediately if playing
-	if (item.audio_track < 0) mpv_set_property_string(self->m_mpv, "aid", "no");
-	else mpv_set_property_string(self->m_mpv, "aid", std::to_string(item.audio_track).c_str());
-
-	if (item.sub_track < 0) mpv_set_property_string(self->m_mpv, "sid", "no");
-	else mpv_set_property_string(self->m_mpv, "sid", std::to_string(item.sub_track).c_str());
-
-	mpv_set_property_string(self->m_mpv, "loop-file", item.loop ? "inf" : "no");
-	self->set_volume(item.volume);
-
-	double sub_delay = obs_data_get_double(settings, "sub_delay");
-	mpv_set_property(self->m_mpv, "sub-delay", MPV_FORMAT_DOUBLE, &sub_delay);
-
-	double sub_scale = obs_data_get_double(settings, "sub_scale");
-	mpv_set_property(self->m_mpv, "sub-scale", MPV_FORMAT_DOUBLE, &sub_scale);
-
-	double sub_pos = obs_data_get_double(settings, "sub_pos");
-	mpv_set_property(self->m_mpv, "sub-pos", MPV_FORMAT_DOUBLE, &sub_pos);
-
-	const char *sub_path = obs_data_get_string(settings, "load_subtitle");
-	if (sub_path && *sub_path) {
-		item.ext_sub_path = sub_path;
-		const char *cmd[] = {"sub-add", sub_path, "select", nullptr};
-		mpv_command_async(self->m_mpv, 0, cmd);
-		obs_data_set_string(settings, "load_subtitle", "");
-	}
+    auto self = static_cast<ObsMpvSource*>(data);
+    self->m_restart_on_activate = obs_data_get_bool(settings, "restart_on_activate");
+    // self->m_pause_on_deactivate = obs_data_get_bool(settings, "pause_on_deactivate"); // Not exposed yet, hardcoded true for now or add to dock
+    self->load_playlist(settings);
 }
 
 void ObsMpvSource::on_mpv_render_update(void *ctx) { static_cast<ObsMpvSource*>(ctx)->m_redraw_needed = true; }
@@ -222,6 +224,7 @@ ObsMpvSource::ObsMpvSource(obs_source_t *source, obs_data_t *settings) : m_sourc
 	mpv_render_context_set_update_callback(m_mpv_render_ctx, on_mpv_render_update, this);
 
 	m_auto_obs_fps = obs_data_get_bool(settings, "auto_obs_fps");
+	m_restart_on_activate = obs_data_get_bool(settings, "restart_on_activate");
 	load_playlist(settings);
 
 	m_audio_thread = std::thread(&ObsMpvSource::audio_thread_func, this);

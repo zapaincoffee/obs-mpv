@@ -119,10 +119,9 @@ MpvControlDock::MpvControlDock(QWidget *parent) : QDockWidget(parent), m_current
     
     // Advanced Toggles
     QHBoxLayout *advBtns = new QHBoxLayout();
-    m_checkFadePlay = new QCheckBox("Play w/ Fade", content);
-    m_btnRestartFade = new QPushButton("Restart w/ Fade", content);
-    advBtns->addWidget(m_checkFadePlay);
-    advBtns->addWidget(m_btnRestartFade);
+    m_checkRestartOnActivate = new QCheckBox("Restart on Activate", content);
+    m_checkRestartOnActivate->setToolTip("Restart playlist from beginning when source becomes active (transition to program)");
+    advBtns->addWidget(m_checkRestartOnActivate);
     controlsLayout->addLayout(advBtns);
 
     // Options
@@ -188,7 +187,15 @@ MpvControlDock::MpvControlDock(QWidget *parent) : QDockWidget(parent), m_current
     connect(m_btnPause, &QPushButton::clicked, this, &MpvControlDock::onPauseClicked);
     connect(m_btnStop, &QPushButton::clicked, this, &MpvControlDock::onStopClicked);
     connect(m_btnRestart, &QPushButton::clicked, this, &MpvControlDock::onRestartClicked);
-    connect(m_btnRestartFade, &QPushButton::clicked, this, &MpvControlDock::onRestartFadeClicked);
+    
+    connect(m_checkRestartOnActivate, &QCheckBox::clicked, [this](bool checked){
+        if (m_currentSource) {
+            obs_data_t *s = obs_source_get_settings(m_currentSource);
+            obs_data_set_bool(s, "restart_on_activate", checked);
+            obs_source_update(m_currentSource, s);
+            obs_data_release(s);
+        }
+    });
     
     connect(m_btnSubSettings, &QPushButton::clicked, m_subDialog, &QDialog::show);
     connect(m_btnLoadSubs, &QPushButton::clicked, this, &MpvControlDock::onLoadSubsClicked);
@@ -328,6 +335,10 @@ void MpvControlDock::updateUiFromSource() {
     m_checkAutoFPS->blockSignals(true);
     m_checkAutoFPS->setChecked(obs_data_get_bool(s, "auto_obs_fps"));
     m_checkAutoFPS->blockSignals(false);
+    
+    m_checkRestartOnActivate->blockSignals(true);
+    m_checkRestartOnActivate->setChecked(obs_data_get_bool(s, "restart_on_activate"));
+    m_checkRestartOnActivate->blockSignals(false);
 
     auto parse = [&](const char *key, QComboBox *combo) {
         if (combo->view()->isVisible()) return;
@@ -358,11 +369,6 @@ void MpvControlDock::onPlayClicked() {
 
     int selectedRow = m_table->currentRow();
     
-    if (m_checkFadePlay->isChecked()) {
-        source->playlist_play_with_fade(selectedRow >= 0 ? selectedRow : source->get_current_index(), m_spinFadeIn->value());
-        return;
-    }
-
     // Standard play logic
     if (source->is_paused() || source->is_idle()) {
         source->play();
@@ -383,11 +389,6 @@ void MpvControlDock::onStopClicked() { if (m_currentSource) obs_source_media_sto
 void MpvControlDock::onRestartClicked() {
     ObsMpvSource *source = getCurrentMpvSource();
     if (source) source->seek(0);
-}
-
-void MpvControlDock::onRestartFadeClicked() {
-    ObsMpvSource *source = getCurrentMpvSource();
-    if (source) source->playlist_restart_with_fade(m_spinFadeIn->value());
 }
 
 void MpvControlDock::onSeekSliderReleased() {

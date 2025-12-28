@@ -27,6 +27,9 @@ public:
     static uint32_t obs_get_width(void *data);
     static uint32_t obs_get_height(void *data);
     static void obs_video_tick(void *data, float seconds);
+    
+    static void obs_activate(void *data);
+    static void obs_deactivate(void *data);
 
     // OBS Media Callbacks
     static void obs_media_play_pause(void *data, bool pause);
@@ -149,6 +152,10 @@ private:
     std::atomic<bool> m_redraw_needed;
     std::atomic<bool> m_is_loading;
     bool m_auto_obs_fps = false;
+    
+    // Activation behaviors
+    bool m_restart_on_activate = false; // "Restart playback when source becomes active"
+    bool m_pause_on_deactivate = true; // Typically desirable to pause when hidden
 
     // Audio via FIFO
     std::string m_fifo_path;

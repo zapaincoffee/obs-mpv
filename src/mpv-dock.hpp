@@ -78,8 +78,7 @@ private:
     QPushButton *m_btnRestart;
     
     // Toggles
-    QCheckBox *m_checkFadePlay;
-    QPushButton *m_btnRestartFade;
+    QCheckBox *m_checkRestartOnActivate; // "Restart when active"
 
     QComboBox *m_comboAudio;
     QComboBox *m_comboSubs;
