@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <atomic>
+#include <deque>
 #include <mutex>
 #include <thread>
 #include <obs-module.h>
