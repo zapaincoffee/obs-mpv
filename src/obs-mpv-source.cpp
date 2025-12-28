@@ -690,7 +690,7 @@ double ObsMpvSource::get_time_remaining() {
     return (d > p) ? d - p : 0.0;
 }
 
-double ObsMpvSource::get_playlist_remaining_time() {
+double ObsMpvSource::get_playlist_time_remaining() {
     double current_rem = get_time_remaining();
     double following = 0.0;
     if (m_current_index >= 0) {

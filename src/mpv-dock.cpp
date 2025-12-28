@@ -22,259 +22,29 @@
 #include "plugin-support.h"
 
 MpvControlDock::MpvControlDock(QWidget *parent) : QDockWidget(parent), m_currentSource(nullptr), m_isSeeking(false) {
-	setObjectName("MPVControls");
-	setWindowTitle("MPV Controls & Playlist");
-	setMinimumWidth(350);
+    setObjectName("MPVControls");
+    setWindowTitle("MPV Controls & Playlist");
+    setMinimumWidth(350);
 
-	m_subDialog = new MpvSubSettingsDialog(this);
+    m_subDialog = new MpvSubSettingsDialog(this);
 
-	QWidget *content = new QWidget(this);
-	QVBoxLayout *layout = new QVBoxLayout(content);
+    QWidget *content = new QWidget(this);
+    QVBoxLayout *layout = new QVBoxLayout(content);
 
-	// Source Selection
-	QHBoxLayout *sourceLayout = new QHBoxLayout();
-	sourceLayout->addWidget(new QLabel("Target:", content));
-	m_comboSources = new QComboBox(content);
-	sourceLayout->addWidget(m_comboSources);
-	layout->addLayout(sourceLayout);
+    // Source Selection
+    QHBoxLayout *sourceLayout = new QHBoxLayout();
+    sourceLayout->addWidget(new QLabel("Target:", content));
+    m_comboSources = new QComboBox(content);
+    sourceLayout->addWidget(m_comboSources);
+    layout->addLayout(sourceLayout);
 
-	    // Version Label
-	    QLabel *lblVersion = new QLabel(QString("v%1 (Build %2)").arg(PLUGIN_VERSION).arg("95e0f95"), content);
-	    lblVersion->setAlignment(Qt::AlignRight);
-	    lblVersion->setStyleSheet("color: gray; font-size: 10px;");
-	    layout->addWidget(lblVersion);
-	
-	    // --- Playlist Table ---
-	    m_table = new PlaylistTableWidget(this, content);
-	    layout->addWidget(m_table);
-	
-	    // --- Media Controls Group ---
-	    QGroupBox *controlsGroup = new QGroupBox("Controls", content);
-	    QVBoxLayout *controlsLayout = new QVBoxLayout(controlsGroup);
-	
-	    // Seek Slider
-	    m_sliderSeek = new QSlider(Qt::Horizontal, content);
-	    m_sliderSeek->setRange(0, 1000);
-	    controlsLayout->addWidget(m_sliderSeek);
-	    
-	    // Time Labels
-	    QHBoxLayout *timeLayout = new QHBoxLayout();
-	    m_lblTimeCurrent = new QLabel("00:00", content);
-	    m_lblTimeRemaining = new QLabel("-00:00", content);
-	    m_lblPlaylistRemaining = new QLabel("Total: 00:00", content);
-	    timeLayout->addWidget(m_lblTimeCurrent);
-	    timeLayout->addStretch();
-	    timeLayout->addWidget(m_lblTimeRemaining);
-	    timeLayout->addStretch();
-	    timeLayout->addWidget(m_lblPlaylistRemaining);
-	    controlsLayout->addLayout(timeLayout);
-	
-	    // Volume Slider
-	    QHBoxLayout *volLayout = new QHBoxLayout();
-	    volLayout->addWidget(new QLabel("Vol:", content));
-	    m_sliderVolume = new QSlider(Qt::Horizontal, content);
-	    m_sliderVolume->setRange(0, 100);
-	    m_sliderVolume->setValue(100);
-	    volLayout->addWidget(m_sliderVolume);
-	    controlsLayout->addLayout(volLayout);
-	
-	    // Transport Controls
-	    QHBoxLayout *btns = new QHBoxLayout();
-	    m_btnRestart = new QPushButton("⏮", content); m_btnRestart->setToolTip("Play from Beginning");
-	    m_btnPlay = new QPushButton("▶", content); m_btnPlay->setToolTip("Play");
-	    m_btnPause = new QPushButton("⏸", content); m_btnPause->setToolTip("Pause");
-	    m_btnStop = new QPushButton("⏹", content); m_btnStop->setToolTip("Stop");
-	    
-	    btns->addWidget(m_btnRestart);
-	    btns->addWidget(m_btnPlay);
-	    btns->addWidget(m_btnPause);
-	    btns->addWidget(m_btnStop);
-	    controlsLayout->addLayout(btns);
-	    
-	    // Advanced Toggles
-	    QHBoxLayout *advBtns = new QHBoxLayout();
-	    m_checkFadePlay = new QCheckBox("Play w/ Fade", content);
-	    m_btnRestartFade = new QPushButton("Restart w/ Fade", content);
-	    advBtns->addWidget(m_checkFadePlay);
-	    advBtns->addWidget(m_btnRestartFade);
-	    controlsLayout->addLayout(advBtns);
-	
-	    // Options
-	    QFormLayout *form = new QFormLayout();
-	    m_comboAudio = new QComboBox(content);
-	    m_comboSubs = new QComboBox(content);
-	    m_spinLoop = new QSpinBox(content);
-	    m_spinLoop->setRange(-1, 99);
-	    m_spinLoop->setSpecialValueText("Infinite");
-	
-	    // Fade In Row
-	    QHBoxLayout *fadeInLayout = new QHBoxLayout();
-	    m_checkFadeIn = new QCheckBox("Fade In:", content);
-	    m_spinFadeIn = new QDoubleSpinBox(content);
-	    m_spinFadeIn->setRange(0, 10.0);
-	    m_spinFadeIn->setSuffix(" s");
-	    m_spinFadeIn->setMinimumHeight(30);
-	    m_spinFadeIn->setEnabled(false);
-	    fadeInLayout->addWidget(m_checkFadeIn);
-	    fadeInLayout->addWidget(m_spinFadeIn);
-	
-	    // Fade Out Row
-	    QHBoxLayout *fadeOutLayout = new QHBoxLayout();
-	    m_checkFadeOut = new QCheckBox("Fade Out:", content);
-	    m_spinFadeOut = new QDoubleSpinBox(content);
-	    m_spinFadeOut->setRange(0, 10.0);
-	    m_spinFadeOut->setSuffix(" s");
-	    m_spinFadeOut->setMinimumHeight(30);
-	    m_spinFadeOut->setEnabled(false);
-	    fadeOutLayout->addWidget(m_checkFadeOut);
-	    fadeOutLayout->addWidget(m_spinFadeOut);
-	
-	    form->addRow("Audio:", m_comboAudio);
-	    form->addRow("Subs:", m_comboSubs);
-	    form->addRow("Loops:", m_spinLoop); // Loop Count
-	    form->addRow(fadeInLayout);
-	    form->addRow(fadeOutLayout);
-	    
-	    QPushButton *btnSubSettings = new QPushButton("Subtitle Settings...", content);
-	    form->addRow(btnSubSettings);
-	
-	    controlsLayout->addLayout(form);
-	    layout->addWidget(controlsGroup);
-	
-	    // Connect signals
-	    connect(m_comboSources, &QComboBox::currentIndexChanged, this, &MpvControlDock::onSourceChanged);
-	    connect(m_sliderSeek, &QSlider::sliderReleased, this, &MpvControlDock::onSeek);
-	    connect(m_sliderSeek, &QSlider::sliderPressed, this, [this]() { m_isSeeking = true; });
-	    connect(m_sliderVolume, &QSlider::valueChanged, this, &MpvControlDock::onVolumeChanged);
-	    
-	    connect(m_btnPlay, &QPushButton::clicked, this, &MpvControlDock::onPlayClicked);
-	    connect(m_btnPause, &QPushButton::clicked, this, &MpvControlDock::onPauseClicked);
-	    connect(m_btnStop, &QPushButton::clicked, this, &MpvControlDock::onStopClicked);
-	    connect(m_btnRestart, &QPushButton::clicked, this, &MpvControlDock::onRestartClicked);
-	    connect(m_btnRestartFade, &QPushButton::clicked, this, &MpvControlDock::onRestartFadeClicked);
-	    
-	    connect(btnSubSettings, &QPushButton::clicked, m_subDialog, &QDialog::show);
-	
-	    connect(m_comboAudio, &QComboBox::activated, this, &MpvControlDock::onTrackChanged);
-	    connect(m_comboSubs, &QComboBox::activated, this, &MpvControlDock::onTrackChanged);
-	    
-	    connect(m_checkFadeIn, &QCheckBox::toggled, m_spinFadeIn, &QDoubleSpinBox::setEnabled);
-	    connect(m_checkFadeOut, &QCheckBox::toggled, m_spinFadeOut, &QDoubleSpinBox::setEnabled);
-	    
-	    connect(m_checkFadeIn, &QCheckBox::clicked, this, &MpvControlDock::saveSettings);
-	    connect(m_spinFadeIn, &QDoubleSpinBox::editingFinished, this, &MpvControlDock::saveSettings);
-	    connect(m_checkFadeOut, &QCheckBox::clicked, this, &MpvControlDock::saveSettings);
-	    connect(m_spinFadeOut, &QDoubleSpinBox::editingFinished, this, &MpvControlDock::saveSettings);
-	    connect(m_spinLoop, &QSpinBox::editingFinished, this, &MpvControlDock::saveSettings);
-	
-	    QTimer *timer = new QTimer(this);
-	    connect(timer, &QTimer::timeout, this, &MpvControlDock::updateTimer);
-	    timer->start(100);
-	
-	    refreshSources();
-	}
-	
-	void MpvControlDock::onPlayClicked() {
-	    ObsMpvSource *source = getCurrentMpvSource();
-	    if (!source) return;
-	    
-	    if (m_checkFadePlay->isChecked()) {
-	        source->playlist_play_with_fade(source->get_current_index(), m_spinFadeIn->value());
-	    } else {
-	        source->play(); // Resume or Play
-	    }
-	}
-	
-	void MpvControlDock::onPauseClicked() {
-	    ObsMpvSource *source = getCurrentMpvSource();
-	    if (source) source->pause();
-	}
-	
-	void MpvControlDock::onStopClicked() {
-	    ObsMpvSource *source = getCurrentMpvSource();
-	    if (source) source->stop();
-	}
-	
-	void MpvControlDock::onRestartClicked() {
-	    ObsMpvSource *source = getCurrentMpvSource();
-	    if (source) source->seek(0);
-	}
-	
-	void MpvControlDock::onRestartFadeClicked() {
-	    ObsMpvSource *source = getCurrentMpvSource();
-	    if (source) source->playlist_restart_with_fade(m_spinFadeIn->value());
-	}
-	
-	void MpvControlDock::updateTimer() {
-	    ObsMpvSource *source = getCurrentMpvSource();
-	    if (!source) {
-	        setEnabled(false);
-	        m_lblTimeCurrent->setText("00:00");
-	        return;
-	    }
-	    setEnabled(true);
-	
-	    if (!m_isSeeking) {
-	        double pos = source->get_time_pos();
-	        double dur = source->get_duration();
-	        if (dur > 0) {
-	            m_sliderSeek->setValue((int)((pos / dur) * 1000));
-	        } else {
-	            m_sliderSeek->setValue(0);
-	        }
-	        
-	        auto fmt = [](double s) {
-	            int m = (int)s / 60;
-	            int sec = (int)s % 60;
-	            return QString("%1:%2").arg(m, 2, 10, QChar('0')).arg(sec, 2, 10, QChar('0'));
-	        };
-	        
-	        m_lblTimeCurrent->setText(fmt(pos));
-	        m_lblTimeRemaining->setText("-" + fmt(source->get_time_remaining()));
-	        m_lblPlaylistRemaining->setText("Total: " + fmt(source->get_playlist_time_remaining()));
-	    }
-	    
-	    // Highlight Active Track
-	    int idx = source->get_current_index();
-	    if (idx >= 0 && idx < m_table->rowCount()) {
-	        for (int i=0; i<m_table->rowCount(); i++) {
-	            // Simple visual check - could be optimized
-	            QFont f = m_table->item(i, 0)->font();
-	            f.setBold(i == idx);
-	            m_table->item(i, 0)->setFont(f);
-	            if (i == idx) m_table->selectRow(i);
-	        }
-	    }
-	    
-	    // Check if tracks changed (simple polling for now)
-	    // In a real optimized version we'd use a signal or atomic flag
-	}
-	form->addRow("Audio Track:", m_comboAudio);
-	form->addRow("Subtitle Track:", m_comboSubs);
-	form->addRow("Loop Count:", m_spinLoop);
-	form->addRow(fadeInLayout);
-	form->addRow(fadeOutLayout);
+    // Version Label
+    QLabel *lblVersion = new QLabel(QString("v%1 (Build %2)").arg(PLUGIN_VERSION).arg("95e0f95"), content);
+    lblVersion->setAlignment(Qt::AlignRight);
+    lblVersion->setStyleSheet("color: gray; font-size: 10px;");
+    layout->addWidget(lblVersion);
 
-	m_checkAutoFPS = new QCheckBox("Auto Match OBS FPS", content);
-	form->addRow(m_checkAutoFPS);
-
-	controlsLayout->addLayout(form);
-
-	// Subtitle Actions
-	QHBoxLayout *subBtns = new QHBoxLayout();
-	m_btnLoadSubs = new QPushButton("Load Subs...", content);
-	m_btnSubSettings = new QPushButton("Sub Settings", content);
-	subBtns->addWidget(m_btnLoadSubs);
-	subBtns->addWidget(m_btnSubSettings);
-	controlsLayout->addLayout(subBtns);
-
-	controlsGroup->setLayout(controlsLayout);
-	layout->addWidget(controlsGroup);
-
-	// --- Playlist Group ---
-	QGroupBox *playlistGroup = new QGroupBox("Playlist", content);
-	QVBoxLayout *playlistLayout = new QVBoxLayout();
-
+    // --- Playlist Table ---
     m_table = new PlaylistTableWidget(this, content);
     m_table->setColumnCount(6);
     m_table->setHorizontalHeaderLabels({"File", "Duration", "FPS", "Ch", "Loop", "Subs"});
@@ -286,10 +56,9 @@ MpvControlDock::MpvControlDock(QWidget *parent) : QDockWidget(parent), m_current
     m_table->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
     m_table->horizontalHeader()->setSectionResizeMode(4, QHeaderView::ResizeToContents);
     m_table->horizontalHeader()->setSectionResizeMode(5, QHeaderView::ResizeToContents);
+    layout->addWidget(m_table);
 
-    playlistLayout->addWidget(m_table);
-
-    // Playlist buttons
+    // --- Playlist Controls ---
     QHBoxLayout *playlistBtns = new QHBoxLayout();
     m_btnAdd = new QPushButton("Add", content);
     m_btnRemove = new QPushButton("Remove", content);
@@ -300,32 +69,142 @@ MpvControlDock::MpvControlDock(QWidget *parent) : QDockWidget(parent), m_current
     playlistBtns->addStretch();
     playlistBtns->addWidget(m_btnUp);
     playlistBtns->addWidget(m_btnDown);
-    playlistLayout->addLayout(playlistBtns);
+    layout->addLayout(playlistBtns);
 
     m_labelTotalDuration = new QLabel("Total Duration: 00:00:00", content);
-    playlistLayout->addWidget(m_labelTotalDuration);
+    layout->addWidget(m_labelTotalDuration);
 
-    playlistGroup->setLayout(playlistLayout);
-    layout->addWidget(playlistGroup);
+    // --- Media Controls Group ---
+    QGroupBox *controlsGroup = new QGroupBox("Controls", content);
+    QVBoxLayout *controlsLayout = new QVBoxLayout(controlsGroup);
 
+    // Seek Slider
+    m_sliderSeek = new QSlider(Qt::Horizontal, content);
+    m_sliderSeek->setRange(0, 1000);
+    controlsLayout->addWidget(m_sliderSeek);
+    
+    // Time Labels
+    QHBoxLayout *timeLayout = new QHBoxLayout();
+    m_lblTimeCurrent = new QLabel("00:00", content);
+    m_lblTimeRemaining = new QLabel("-00:00", content);
+    m_lblPlaylistRemaining = new QLabel("Total: 00:00", content);
+    timeLayout->addWidget(m_lblTimeCurrent);
+    timeLayout->addStretch();
+    timeLayout->addWidget(m_lblTimeRemaining);
+    timeLayout->addStretch();
+    timeLayout->addWidget(m_lblPlaylistRemaining);
+    controlsLayout->addLayout(timeLayout);
+
+    // Volume Slider
+    QHBoxLayout *volLayout = new QHBoxLayout();
+    volLayout->addWidget(new QLabel("Vol:", content));
+    m_sliderVolume = new QSlider(Qt::Horizontal, content);
+    m_sliderVolume->setRange(0, 100);
+    m_sliderVolume->setValue(100);
+    volLayout->addWidget(m_sliderVolume);
+    controlsLayout->addLayout(volLayout);
+
+    // Transport Controls
+    QHBoxLayout *btns = new QHBoxLayout();
+    m_btnRestart = new QPushButton("⏮", content); m_btnRestart->setToolTip("Play from Beginning");
+    m_btnPlay = new QPushButton("▶", content); m_btnPlay->setToolTip("Play");
+    m_btnPause = new QPushButton("⏸", content); m_btnPause->setToolTip("Pause");
+    m_btnStop = new QPushButton("⏹", content); m_btnStop->setToolTip("Stop");
+    
+    btns->addWidget(m_btnRestart);
+    btns->addWidget(m_btnPlay);
+    btns->addWidget(m_btnPause);
+    btns->addWidget(m_btnStop);
+    controlsLayout->addLayout(btns);
+    
+    // Advanced Toggles
+    QHBoxLayout *advBtns = new QHBoxLayout();
+    m_checkFadePlay = new QCheckBox("Play w/ Fade", content);
+    m_btnRestartFade = new QPushButton("Restart w/ Fade", content);
+    advBtns->addWidget(m_checkFadePlay);
+    advBtns->addWidget(m_btnRestartFade);
+    controlsLayout->addLayout(advBtns);
+
+    // Options
+    QFormLayout *form = new QFormLayout();
+    m_comboAudio = new QComboBox(content);
+    m_comboSubs = new QComboBox(content);
+    m_spinLoop = new QSpinBox(content);
+    m_spinLoop->setRange(-1, 99);
+    m_spinLoop->setSpecialValueText("Infinite");
+
+    // Fade In Row
+    QHBoxLayout *fadeInLayout = new QHBoxLayout();
+    m_checkFadeIn = new QCheckBox("Fade In:", content);
+    m_spinFadeIn = new QDoubleSpinBox(content);
+    m_spinFadeIn->setRange(0, 10.0);
+    m_spinFadeIn->setSuffix(" s");
+    m_spinFadeIn->setMinimumHeight(30);
+    m_spinFadeIn->setEnabled(false);
+    fadeInLayout->addWidget(m_checkFadeIn);
+    fadeInLayout->addWidget(m_spinFadeIn);
+
+    // Fade Out Row
+    QHBoxLayout *fadeOutLayout = new QHBoxLayout();
+    m_checkFadeOut = new QCheckBox("Fade Out:", content);
+    m_spinFadeOut = new QDoubleSpinBox(content);
+    m_spinFadeOut->setRange(0, 10.0);
+    m_spinFadeOut->setSuffix(" s");
+    m_spinFadeOut->setMinimumHeight(30);
+    m_spinFadeOut->setEnabled(false);
+    fadeOutLayout->addWidget(m_checkFadeOut);
+    fadeOutLayout->addWidget(m_spinFadeOut);
+
+    form->addRow("Audio:", m_comboAudio);
+    form->addRow("Subs:", m_comboSubs);
+    form->addRow("Loops:", m_spinLoop);
+    form->addRow(fadeInLayout);
+    form->addRow(fadeOutLayout);
+    
+    m_checkAutoFPS = new QCheckBox("Auto Match OBS FPS", content);
+    form->addRow(m_checkAutoFPS);
+    
+    // Subtitle Actions
+    QHBoxLayout *subBtns = new QHBoxLayout();
+    m_btnLoadSubs = new QPushButton("Load Subs...", content);
+    m_btnSubSettings = new QPushButton("Sub Settings", content);
+    subBtns->addWidget(m_btnLoadSubs);
+    subBtns->addWidget(m_btnSubSettings);
+    form->addRow(subBtns);
+
+    controlsLayout->addLayout(form);
+    layout->addWidget(controlsGroup);
+    
     layout->addStretch();
     setWidget(content);
 
-    // Connections
+    // Connect signals
     connect(m_comboSources, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &MpvControlDock::onSourceChanged);
-    connect(m_btnPlay, &QPushButton::clicked, this, &MpvControlDock::onPlayClicked);
-    connect(m_btnStop, &QPushButton::clicked, this, &MpvControlDock::onStopClicked);
-    connect(m_sliderSeek, &QSlider::sliderPressed, [this](){ m_isSeeking = true; });
     connect(m_sliderSeek, &QSlider::sliderReleased, this, &MpvControlDock::onSeekSliderReleased);
+    connect(m_sliderSeek, &QSlider::sliderPressed, [this]() { m_isSeeking = true; });
     connect(m_sliderVolume, &QSlider::valueChanged, this, &MpvControlDock::onVolumeChanged);
+    
+    connect(m_btnPlay, &QPushButton::clicked, this, &MpvControlDock::onPlayClicked);
+    connect(m_btnPause, &QPushButton::clicked, this, &MpvControlDock::onPauseClicked);
+    connect(m_btnStop, &QPushButton::clicked, this, &MpvControlDock::onStopClicked);
+    connect(m_btnRestart, &QPushButton::clicked, this, &MpvControlDock::onRestartClicked);
+    connect(m_btnRestartFade, &QPushButton::clicked, this, &MpvControlDock::onRestartFadeClicked);
+    
+    connect(m_btnSubSettings, &QPushButton::clicked, m_subDialog, &QDialog::show);
+    connect(m_btnLoadSubs, &QPushButton::clicked, this, &MpvControlDock::onLoadSubsClicked);
+
     connect(m_comboAudio, QOverload<int>::of(&QComboBox::activated), this, &MpvControlDock::onAudioTrackChanged);
     connect(m_comboSubs, QOverload<int>::of(&QComboBox::activated), this, &MpvControlDock::onSubTrackChanged);
-    connect(m_spinLoop, QOverload<int>::of(&QSpinBox::valueChanged), this, &MpvControlDock::onLoopCountChanged);
-    connect(m_checkFadeIn, &QCheckBox::toggled, this, &MpvControlDock::onFadeInToggled);
-    connect(m_spinFadeIn, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &MpvControlDock::onFadeInChanged);
-    connect(m_checkFadeOut, &QCheckBox::toggled, this, &MpvControlDock::onFadeOutToggled);
-    connect(m_spinFadeOut, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, &MpvControlDock::onFadeOutChanged);
-
+    
+    connect(m_checkFadeIn, &QCheckBox::toggled, m_spinFadeIn, &QDoubleSpinBox::setEnabled);
+    connect(m_checkFadeOut, &QCheckBox::toggled, m_spinFadeOut, &QDoubleSpinBox::setEnabled);
+    
+    connect(m_checkFadeIn, &QCheckBox::clicked, this, &MpvControlDock::saveSettings);
+    connect(m_spinFadeIn, &QDoubleSpinBox::editingFinished, this, &MpvControlDock::saveSettings);
+    connect(m_checkFadeOut, &QCheckBox::clicked, this, &MpvControlDock::saveSettings);
+    connect(m_spinFadeOut, &QDoubleSpinBox::editingFinished, this, &MpvControlDock::saveSettings);
+    connect(m_spinLoop, &QSpinBox::editingFinished, this, &MpvControlDock::saveSettings);
+    
     connect(m_checkAutoFPS, &QCheckBox::toggled, [this](bool checked){
         ObsMpvSource *source = getCurrentMpvSource();
         if (source) {
@@ -336,10 +215,7 @@ MpvControlDock::MpvControlDock(QWidget *parent) : QDockWidget(parent), m_current
             obs_data_release(s);
         }
     });
-
-    connect(m_btnLoadSubs, &QPushButton::clicked, this, &MpvControlDock::onLoadSubsClicked);
-    connect(m_btnSubSettings, &QPushButton::clicked, this, &MpvControlDock::onSubSettingsClicked);
-
+    
     // Playlist Connections
     connect(m_btnAdd, &QPushButton::clicked, this, &MpvControlDock::onAddFiles);
     connect(m_btnRemove, &QPushButton::clicked, this, &MpvControlDock::onRemoveFile);
@@ -347,10 +223,11 @@ MpvControlDock::MpvControlDock(QWidget *parent) : QDockWidget(parent), m_current
     connect(m_btnDown, &QPushButton::clicked, this, &MpvControlDock::onMoveDown);
     connect(m_table, &QTableWidget::itemClicked, this, &MpvControlDock::onItemClicked);
 
+    QTimer *timer = new QTimer(this);
+    connect(timer, &QTimer::timeout, this, &MpvControlDock::onTimerTick);
+    timer->start(100);
 
-    m_timer = new QTimer(this);
-    connect(m_timer, &QTimer::timeout, this, &MpvControlDock::onTimerTick);
-    m_timer->start(100);
+    updateSourceList();
 }
 
 MpvControlDock::~MpvControlDock() {
@@ -359,16 +236,11 @@ MpvControlDock::~MpvControlDock() {
 
 void MpvControlDock::saveSettings() {
     // Helper to trigger save on generic edits
-    // Actual saving happens via signal connections to specific slots or immediate updates
-    // This is just a placeholder if needed for batch saves
 }
 
 void MpvControlDock::onTimerTick() {
     updateSourceList();
-    
-    // Call the specific timer update for labels/seek
     updateTimer(); 
-    
     if (!m_currentSource) {
         setEnabled(false);
         if (m_subDialog->isVisible()) m_subDialog->hide();
@@ -430,13 +302,13 @@ void MpvControlDock::updateUiFromSource() {
         if (source->is_playing()) {
             m_btnPlay->setText("▶");
             m_btnPlay->setToolTip("Resume (Playing)");
-            m_btnPlay->setEnabled(false); // Disable play if playing
+            m_btnPlay->setEnabled(false); 
             m_btnPause->setEnabled(true);
         } else if (source->is_paused()) {
             m_btnPlay->setText("▶");
             m_btnPlay->setToolTip("Resume");
             m_btnPlay->setEnabled(true);
-            m_btnPause->setEnabled(false); // Disable pause if paused
+            m_btnPause->setEnabled(false);
         } else {
             m_btnPlay->setText("▶");
             m_btnPlay->setEnabled(true);
@@ -501,7 +373,22 @@ void MpvControlDock::onPlayClicked() {
     }
 }
 
+void MpvControlDock::onPauseClicked() {
+    ObsMpvSource *source = getCurrentMpvSource();
+    if (source) source->pause();
+}
+
 void MpvControlDock::onStopClicked() { if (m_currentSource) obs_source_media_stop(m_currentSource); }
+
+void MpvControlDock::onRestartClicked() {
+    ObsMpvSource *source = getCurrentMpvSource();
+    if (source) source->seek(0);
+}
+
+void MpvControlDock::onRestartFadeClicked() {
+    ObsMpvSource *source = getCurrentMpvSource();
+    if (source) source->playlist_restart_with_fade(m_spinFadeIn->value());
+}
 
 void MpvControlDock::onSeekSliderReleased() {
     m_isSeeking = false;
@@ -810,8 +697,6 @@ void MpvControlDock::updatePlaylistTable() {
             if (isCurrent) {
                 QFont font = m_table->font();
                 font.setBold(true);
-                // Highlight color using OBS theme compatible logic usually, 
-                // but for now a simple transparent blue is okay.
                 QColor activeColor(0, 120, 215, 60); 
 
                 for (int c = 0; c < 6; c++) {
@@ -819,8 +704,6 @@ void MpvControlDock::updatePlaylistTable() {
                     if (cell) {
                         cell->setFont(font);
                         cell->setBackground(activeColor);
-                        // Also set text color to ensure contrast? 
-                        // Often better to leave text color for theme compatibility.
                     }
                 }
             }
@@ -844,3 +727,34 @@ QString MpvControlDock::formatTime(double seconds) {
 }
 double MpvControlDock::parseTime(const QString &) {return 0;}
 void MpvControlDock::populateTracks(QComboBox *, const char *) {}
+
+void MpvControlDock::updateTimer() {
+    ObsMpvSource *source = getCurrentMpvSource();
+    if (!source) {
+        m_lblTimeCurrent->setText("00:00");
+        m_lblTimeRemaining->setText("-00:00");
+        m_lblPlaylistRemaining->setText("Total: 00:00");
+        return;
+    }
+
+    if (!m_isSeeking) {
+        double pos = source->get_time_pos();
+        double dur = source->get_duration();
+        if (dur > 0) {
+            m_sliderSeek->setValue((int)((pos / dur) * 1000));
+        } else {
+            m_sliderSeek->setValue(0);
+        }
+        
+        auto fmt = [](double s) {
+            int h = (int)(s / 3600);
+            int m = (int)((s - (h * 3600)) / 60);
+            int sec = (int)s % 60;
+            return QString("%1:%2:%3").arg(h, 2, 10, QChar('0')).arg(m, 2, 10, QChar('0')).arg(sec, 2, 10, QChar('0'));
+        };
+        
+        m_lblTimeCurrent->setText(fmt(pos));
+        m_lblTimeRemaining->setText("-" + fmt(source->get_time_remaining()));
+        m_lblPlaylistRemaining->setText("Total: " + fmt(source->get_playlist_time_remaining()));
+    }
+}
