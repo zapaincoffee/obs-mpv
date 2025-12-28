@@ -26,6 +26,7 @@ This release brings a complete overhaul of the control interface and playlist ma
 ## 🚀 Key Features
 
 *   **Format Support**: Plays MKV, MP4, MOV, AVI, WEBM, and virtually anything `libmpv` can handle.
+*   **Zero Dependencies (Win/Mac)**: `libmpv` is now bundled directly with the plugin for Windows and macOS. No extra installation required.
 *   **Hardware Acceleration**: Uses GPU decoding for low CPU usage.
 *   **Advanced Audio**: Audio is handled via FIFO/Named Pipes for low-latency synchronization.
 *   **Auto-Match OBS FPS**: Option to automatically switch OBS frame rate to match the video source.
@@ -37,19 +38,20 @@ This release brings a complete overhaul of the control interface and playlist ma
 ## 📥 Installation
 
 ### Windows 🪟
-1.  Download the latest `.zip` or `.exe` from the [Releases Page](https://github.com/zapaincoffee/obs-mpv/releases).
-2.  Extract or run the installer.
+1.  Download the latest `.zip` from the [Releases Page](https://github.com/zapaincoffee/obs-mpv/releases).
+2.  Extract the contents to your OBS Studio plugins folder (usually `C:\Program Files\obs-studio\obs-plugins\64bit`).
 3.  Restart OBS Studio.
 
 ### macOS 🍏
 1.  Download the `.pkg` installer from the [Releases Page](https://github.com/zapaincoffee/obs-mpv/releases).
-2.  Run the installer (Right-click -> Open if prompted by security).
+2.  Run the installer.
 3.  Restart OBS Studio.
 
 ### Linux 🐧
 1.  Download the `.deb` package.
-2.  Install: `sudo apt install ./obs-mpv-source.deb`
-3.  Restart OBS Studio.
+2.  Ensure you have `libmpv` installed: `sudo apt install libmpv2`
+3.  Install: `sudo apt install ./obs-mpv-source.deb`
+4.  Restart OBS Studio.
 
 ---
 

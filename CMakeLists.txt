@@ -83,6 +83,12 @@ if(WIN32)
   message(STATUS "Windows MPV_LIBRARY: ${MPV_LIBRARY}")
   target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${MPV_INCLUDE_DIR})
   target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${MPV_LIBRARY})
+  
+  # Bundle libmpv DLL
+  if(MPV_LIBRARY)
+    get_filename_component(MPV_LIB_DIR "${MPV_LIBRARY}" DIRECTORY)
+    install(FILES "${MPV_LIB_DIR}/libmpv-2.dll" DESTINATION "${CMAKE_PROJECT_NAME}/bin/64bit")
+  endif()
 else()
   find_package(PkgConfig REQUIRED)
   pkg_check_modules(MPV REQUIRED mpv)
@@ -93,6 +99,17 @@ else()
   )
   target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${MPV_INCLUDE_DIRS})
   target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${MPV_LIBRARY})
+
+  if(APPLE AND MPV_LIBRARY)
+    # Bundle libmpv dylib on macOS and fix rpath
+    install(FILES "${MPV_LIBRARY}" DESTINATION "${CMAKE_PROJECT_NAME}.plugin/Contents/MacOS")
+    
+    # Post-install fixup for macOS to make it portable
+    get_filename_component(MPV_LIB_NAME "${MPV_LIBRARY}" NAME)
+    install(CODE "
+      execute_process(COMMAND install_name_tool -change \"${MPV_LIBRARY}\" \"@loader_path/${MPV_LIB_NAME}\" \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_PROJECT_NAME}.plugin/Contents/MacOS/${CMAKE_PROJECT_NAME}\")
+    ")
+  endif()
 endif()
 
 set_target_properties_plugin(${CMAKE_PROJECT_NAME} PROPERTIES OUTPUT_NAME ${_name})
