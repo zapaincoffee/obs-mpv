@@ -25,6 +25,7 @@ MpvControlDock::MpvControlDock(QWidget *parent) : QDockWidget(parent), m_current
     setObjectName("MPVControls");
     setWindowTitle("MPV Controls & Playlist");
     setMinimumWidth(350);
+    setAttribute(Qt::WA_DeleteOnClose, false); // Prevent destruction on close
 
     m_subDialog = new MpvSubSettingsDialog(this);
 
@@ -61,9 +62,13 @@ MpvControlDock::MpvControlDock(QWidget *parent) : QDockWidget(parent), m_current
     // --- Playlist Controls ---
     QHBoxLayout *playlistBtns = new QHBoxLayout();
     m_btnAdd = new QPushButton("Add", content);
+    m_btnAdd->setToolTip("Add media files to playlist");
     m_btnRemove = new QPushButton("Remove", content);
+    m_btnRemove->setToolTip("Remove selected file from playlist");
     m_btnUp = new QPushButton("Up", content);
+    m_btnUp->setToolTip("Move selected file up");
     m_btnDown = new QPushButton("Down", content);
+    m_btnDown->setToolTip("Move selected file down");
     playlistBtns->addWidget(m_btnAdd);
     playlistBtns->addWidget(m_btnRemove);
     playlistBtns->addStretch();
@@ -81,13 +86,17 @@ MpvControlDock::MpvControlDock(QWidget *parent) : QDockWidget(parent), m_current
     // Seek Slider
     m_sliderSeek = new QSlider(Qt::Horizontal, content);
     m_sliderSeek->setRange(0, 1000);
+    m_sliderSeek->setToolTip("Seek position");
     controlsLayout->addWidget(m_sliderSeek);
     
     // Time Labels
     QHBoxLayout *timeLayout = new QHBoxLayout();
     m_lblTimeCurrent = new QLabel("00:00", content);
+    m_lblTimeCurrent->setToolTip("Current playback position");
     m_lblTimeRemaining = new QLabel("-00:00", content);
+    m_lblTimeRemaining->setToolTip("Time remaining in current file");
     m_lblPlaylistRemaining = new QLabel("Total: 00:00", content);
+    m_lblPlaylistRemaining->setToolTip("Total time remaining in playlist");
     timeLayout->addWidget(m_lblTimeCurrent);
     timeLayout->addStretch();
     timeLayout->addWidget(m_lblTimeRemaining);
@@ -101,13 +110,14 @@ MpvControlDock::MpvControlDock(QWidget *parent) : QDockWidget(parent), m_current
     m_sliderVolume = new QSlider(Qt::Horizontal, content);
     m_sliderVolume->setRange(0, 100);
     m_sliderVolume->setValue(100);
+    m_sliderVolume->setToolTip("Volume level");
     volLayout->addWidget(m_sliderVolume);
     controlsLayout->addLayout(volLayout);
 
     // Transport Controls
     QHBoxLayout *btns = new QHBoxLayout();
-    m_btnRestart = new QPushButton("⏮", content); m_btnRestart->setToolTip("Play from Beginning");
-    m_btnPlay = new QPushButton("▶", content); m_btnPlay->setToolTip("Play");
+    m_btnRestart = new QPushButton("⏮", content); m_btnRestart->setToolTip("Restart from Beginning");
+    m_btnPlay = new QPushButton("▶", content); m_btnPlay->setToolTip("Play / Resume");
     m_btnPause = new QPushButton("⏸", content); m_btnPause->setToolTip("Pause");
     m_btnStop = new QPushButton("⏹", content); m_btnStop->setToolTip("Stop");
     
@@ -119,8 +129,22 @@ MpvControlDock::MpvControlDock(QWidget *parent) : QDockWidget(parent), m_current
     
     // Advanced Toggles
     QHBoxLayout *advBtns = new QHBoxLayout();
+    m_checkRestartOnActivate = new QCheckBox("Restart on Act.", content);
+    m_checkRestartOnActivate->setToolTip("Restart playlist from beginning when source becomes active (transition to program)");
+    m_checkPlayOnActivate = new QCheckBox("Play on Act.", content);
+    m_checkPlayOnActivate->setToolTip("Resume playback when source becomes active (transition to program)");
+    
+    m_checkDownmix = new QCheckBox("Downmix", content);
+    m_checkDownmix->setToolTip("Downmix multi-channel audio to Stereo");
+
     m_checkFadePlay = new QCheckBox("Play w/ Fade", content);
+    m_checkFadePlay->setToolTip("Use crossfade when playing");
     m_btnRestartFade = new QPushButton("Restart w/ Fade", content);
+    m_btnRestartFade->setToolTip("Restart current file with crossfade");
+    
+    advBtns->addWidget(m_checkRestartOnActivate);
+    advBtns->addWidget(m_checkPlayOnActivate);
+    advBtns->addWidget(m_checkDownmix);
     advBtns->addWidget(m_checkFadePlay);
     advBtns->addWidget(m_btnRestartFade);
     controlsLayout->addLayout(advBtns);
@@ -128,30 +152,37 @@ MpvControlDock::MpvControlDock(QWidget *parent) : QDockWidget(parent), m_current
     // Options
     QFormLayout *form = new QFormLayout();
     m_comboAudio = new QComboBox(content);
+    m_comboAudio->setToolTip("Select audio track");
     m_comboSubs = new QComboBox(content);
+    m_comboSubs->setToolTip("Select subtitle track");
     m_spinLoop = new QSpinBox(content);
     m_spinLoop->setRange(-1, 99);
     m_spinLoop->setSpecialValueText("Infinite");
+    m_spinLoop->setToolTip("Number of times to loop selected file (-1 = infinite)");
 
     // Fade In Row
     QHBoxLayout *fadeInLayout = new QHBoxLayout();
     m_checkFadeIn = new QCheckBox("Fade In:", content);
+    m_checkFadeIn->setToolTip("Enable fade in for selected file");
     m_spinFadeIn = new QDoubleSpinBox(content);
     m_spinFadeIn->setRange(0, 10.0);
     m_spinFadeIn->setSuffix(" s");
     m_spinFadeIn->setMinimumHeight(30);
     m_spinFadeIn->setEnabled(false);
+    m_spinFadeIn->setToolTip("Fade in duration in seconds");
     fadeInLayout->addWidget(m_checkFadeIn);
     fadeInLayout->addWidget(m_spinFadeIn);
 
     // Fade Out Row
     QHBoxLayout *fadeOutLayout = new QHBoxLayout();
     m_checkFadeOut = new QCheckBox("Fade Out:", content);
+    m_checkFadeOut->setToolTip("Enable fade out for selected file");
     m_spinFadeOut = new QDoubleSpinBox(content);
     m_spinFadeOut->setRange(0, 10.0);
     m_spinFadeOut->setSuffix(" s");
     m_spinFadeOut->setMinimumHeight(30);
     m_spinFadeOut->setEnabled(false);
+    m_spinFadeOut->setToolTip("Fade out duration in seconds");
     fadeOutLayout->addWidget(m_checkFadeOut);
     fadeOutLayout->addWidget(m_spinFadeOut);
 
@@ -162,12 +193,15 @@ MpvControlDock::MpvControlDock(QWidget *parent) : QDockWidget(parent), m_current
     form->addRow(fadeOutLayout);
     
     m_checkAutoFPS = new QCheckBox("Auto Match OBS FPS", content);
+    m_checkAutoFPS->setToolTip("Automatically adjust OBS frame rate to match the playing file");
     form->addRow(m_checkAutoFPS);
     
     // Subtitle Actions
     QHBoxLayout *subBtns = new QHBoxLayout();
     m_btnLoadSubs = new QPushButton("Load Subs...", content);
+    m_btnLoadSubs->setToolTip("Load external subtitle file for selected item");
     m_btnSubSettings = new QPushButton("Sub Settings", content);
+    m_btnSubSettings->setToolTip("Open subtitle styling settings");
     subBtns->addWidget(m_btnLoadSubs);
     subBtns->addWidget(m_btnSubSettings);
     form->addRow(subBtns);
@@ -189,6 +223,33 @@ MpvControlDock::MpvControlDock(QWidget *parent) : QDockWidget(parent), m_current
     connect(m_btnStop, &QPushButton::clicked, this, &MpvControlDock::onStopClicked);
     connect(m_btnRestart, &QPushButton::clicked, this, &MpvControlDock::onRestartClicked);
     connect(m_btnRestartFade, &QPushButton::clicked, this, &MpvControlDock::onRestartFadeClicked);
+    
+    connect(m_checkRestartOnActivate, &QCheckBox::clicked, [this](bool checked){
+        if (m_currentSource) {
+            obs_data_t *s = obs_source_get_settings(m_currentSource);
+            obs_data_set_bool(s, "restart_on_activate", checked);
+            obs_source_update(m_currentSource, s);
+            obs_data_release(s);
+        }
+    });
+
+    connect(m_checkPlayOnActivate, &QCheckBox::clicked, [this](bool checked){
+        if (m_currentSource) {
+            obs_data_t *s = obs_source_get_settings(m_currentSource);
+            obs_data_set_bool(s, "play_on_activate", checked);
+            obs_source_update(m_currentSource, s);
+            obs_data_release(s);
+        }
+    });
+
+    connect(m_checkDownmix, &QCheckBox::clicked, [this](bool checked){
+        if (m_currentSource) {
+            obs_data_t *s = obs_source_get_settings(m_currentSource);
+            obs_data_set_bool(s, "downmix_to_stereo", checked);
+            obs_source_update(m_currentSource, s);
+            obs_data_release(s);
+        }
+    });
     
     connect(m_btnSubSettings, &QPushButton::clicked, m_subDialog, &QDialog::show);
     connect(m_btnLoadSubs, &QPushButton::clicked, this, &MpvControlDock::onLoadSubsClicked);
@@ -328,6 +389,19 @@ void MpvControlDock::updateUiFromSource() {
     m_checkAutoFPS->blockSignals(true);
     m_checkAutoFPS->setChecked(obs_data_get_bool(s, "auto_obs_fps"));
     m_checkAutoFPS->blockSignals(false);
+    
+    m_checkRestartOnActivate->blockSignals(true);
+    m_checkRestartOnActivate->setChecked(obs_data_get_bool(s, "restart_on_activate"));
+    m_checkRestartOnActivate->blockSignals(false);
+
+    m_checkPlayOnActivate->blockSignals(true);
+    if (!obs_data_has_user_value(s, "play_on_activate")) m_checkPlayOnActivate->setChecked(true);
+    else m_checkPlayOnActivate->setChecked(obs_data_get_bool(s, "play_on_activate"));
+    m_checkPlayOnActivate->blockSignals(false);
+
+    m_checkDownmix->blockSignals(true);
+    m_checkDownmix->setChecked(obs_data_get_bool(s, "downmix_to_stereo"));
+    m_checkDownmix->blockSignals(false);
 
     auto parse = [&](const char *key, QComboBox *combo) {
         if (combo->view()->isVisible()) return;
@@ -336,7 +410,9 @@ void MpvControlDock::updateUiFromSource() {
         if (combo->property("last_data").toString() == qdata) return;
         combo->setProperty("last_data", qdata);
         combo->blockSignals(true);
-        combo->clear(); combo->addItem("None", -1);
+        combo->clear(); 
+        if (strcmp(key, "track_list_sub") == 0) combo->addItem("None", -1);
+        
         for (const QString &e : qdata.split('|')) {
             QStringList p = e.split(':');
             if (p.size() >= 3) {
@@ -364,7 +440,12 @@ void MpvControlDock::onPlayClicked() {
     }
 
     // Standard play logic
-    if (source->is_paused() || source->is_idle()) {
+    if (source->is_idle()) {
+        if (source->playlist_count() > 0) {
+             if (selectedRow >= 0) source->playlist_play(selectedRow);
+             else source->playlist_play(0);
+        }
+    } else if (source->is_paused()) {
         source->play();
     } else if (selectedRow >= 0 && selectedRow != source->get_current_index()) {
         source->playlist_play(selectedRow);
@@ -634,10 +715,10 @@ void MpvControlDock::onItemClicked(QTableWidgetItem *item) {
     m_spinFadeOut->setValue(playlist_item->fade_out);
     m_spinFadeOut->blockSignals(false);
 
-    auto populate = [](QComboBox *combo, const std::vector<ObsMpvSource::MpvTrack> &tracks, int current_id) {
+    auto populate = [](QComboBox *combo, const std::vector<ObsMpvSource::MpvTrack> &tracks, int current_id, bool allow_none) {
         combo->blockSignals(true);
         combo->clear();
-        combo->addItem("None", -1);
+        if (allow_none) combo->addItem("None", -1);
         for (const auto &t : tracks) {
             combo->addItem(QString::fromStdString(t.name), t.id);
             if (t.id == current_id) combo->setCurrentIndex(combo->count() - 1);
@@ -645,8 +726,8 @@ void MpvControlDock::onItemClicked(QTableWidgetItem *item) {
         combo->blockSignals(false);
     };
 
-    populate(m_comboAudio, playlist_item->audio_tracks, playlist_item->audio_track);
-    populate(m_comboSubs, playlist_item->sub_tracks, playlist_item->sub_track);
+    populate(m_comboAudio, playlist_item->audio_tracks, playlist_item->audio_track, false);
+    populate(m_comboSubs, playlist_item->sub_tracks, playlist_item->sub_track, true);
 }
 
 void MpvControlDock::updatePlaylistTable() {
@@ -659,9 +740,10 @@ void MpvControlDock::updatePlaylistTable() {
     m_table->setRowCount(source->playlist_count());
     double total_duration = 0.0;
 
-    auto createItem = [](const QString &text) {
+    auto createItem = [](const QString &text, const QString &toolTip = "") {
         QTableWidgetItem *item = new QTableWidgetItem(text);
         item->setFlags(item->flags() & ~Qt::ItemIsEditable);
+        if (!toolTip.isEmpty()) item->setToolTip(toolTip);
         return item;
     };
 
@@ -676,11 +758,11 @@ void MpvControlDock::updatePlaylistTable() {
                 else displayName = "⏸ " + displayName;
             }
 
-            m_table->setItem(i, 0, createItem(displayName));
+            m_table->setItem(i, 0, createItem(displayName, QString::fromStdString(item->path)));
             m_table->setItem(i, 1, createItem(formatTime(item->duration)));
 
-            m_table->setItem(i, 2, createItem(item->fps > 0 ? QString::number(item->fps, 'f', 2) : ""));
-            m_table->setItem(i, 3, createItem(item->audio_channels > 0 ? QString::number(item->audio_channels) : ""));
+            m_table->setItem(i, 2, createItem(item->fps > 0 ? QString::number(item->fps, 'f', 2) : "", QString::fromStdString(item->video_info)));
+            m_table->setItem(i, 3, createItem(item->audio_channels > 0 ? QString::number(item->audio_channels) : "", QString::fromStdString(item->audio_info)));
 
             QString loopStr;
             if (item->loop_count < 0) loopStr = "∞";

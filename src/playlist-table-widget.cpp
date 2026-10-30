@@ -43,7 +43,8 @@ void PlaylistTableWidget::dropEvent(QDropEvent *event) {
 			source->playlist_add_multiple(paths);
 			m_dock->updatePlaylistTable();
 		}
-		event->acceptProposedAction();
+		event->accept();
+        return; // Prevent QTableWidget default handling
 	} else if (event->source() == this) {
 		int fromRow = selectionModel()->currentIndex().row();
 		int toRow = indexAt(event->position().toPoint()).row();

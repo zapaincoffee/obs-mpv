@@ -78,6 +78,9 @@ private:
     QPushButton *m_btnRestart;
     
     // Toggles
+    QCheckBox *m_checkRestartOnActivate;
+    QCheckBox *m_checkPlayOnActivate;
+    QCheckBox *m_checkDownmix; // New Downmix Toggle
     QCheckBox *m_checkFadePlay;
     QPushButton *m_btnRestartFade;
 

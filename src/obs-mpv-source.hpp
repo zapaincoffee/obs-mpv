@@ -27,6 +27,9 @@ public:
     static uint32_t obs_get_width(void *data);
     static uint32_t obs_get_height(void *data);
     static void obs_video_tick(void *data, float seconds);
+    
+    static void obs_activate(void *data);
+    static void obs_deactivate(void *data);
 
     // OBS Media Callbacks
     static void obs_media_play_pause(void *data, bool pause);
@@ -66,6 +69,8 @@ public:
         std::vector<MpvTrack> sub_tracks;
         double fps = 0.0;
         int audio_channels = 0;
+        std::string video_info;
+        std::string audio_info;
         
         // Saved state
         double last_seek_pos = 0.0;
@@ -117,38 +122,53 @@ public:
     void save_playlist(obs_data_t *settings);
     void load_playlist(obs_data_t *settings);
     
-    // Metadata Probing
-    struct FileMetadata {
-        double duration;
-        double fps = 0.0;
-        int64_t channels = 0;
-        std::vector<MpvTrack> audio_tracks;
-        std::vector<MpvTrack> sub_tracks;
-    };
-    FileMetadata probe_file(const std::string& path);
-
-private:
-    obs_source_t *m_source;
-    mpv_handle *m_mpv;
-    mpv_render_context *m_mpv_render_ctx;
+        // Metadata Probing
+        struct FileMetadata {
+            double duration;
+            double fps = 0.0;
+            int64_t channels = 0;
+            std::vector<MpvTrack> audio_tracks;
+            std::vector<MpvTrack> sub_tracks;
+        };
+        FileMetadata probe_file(const std::string& path);
     
-    std::vector<PlaylistItem> m_playlist;
-    int m_current_index = -1;
-    SubStyle m_sub_style;
-    
-    uint32_t m_width;
-    uint32_t m_height;
-    std::string m_current_file_path;
-    
-    std::vector<uint8_t> m_sw_buffer;
-    
-    std::deque<uint8_t> m_audio_queue;
-    std::mutex m_audio_mutex;
-    
-    std::atomic<bool> m_events_available;
-    std::atomic<bool> m_redraw_needed;
-    std::atomic<bool> m_is_loading;
-    bool m_auto_obs_fps = false;
+    private:
+        obs_source_t *m_source;
+        mpv_handle *m_mpv;
+        mpv_render_context *m_mpv_render_ctx;
+        std::recursive_mutex m_render_mutex;
+        
+        std::vector<PlaylistItem> m_playlist;
+        int m_current_index = -1;
+        SubStyle m_sub_style;
+        std::string m_last_playlist_json;
+        
+        uint32_t m_width;
+        uint32_t m_height;
+        std::string m_current_file_path;
+        
+            std::vector<uint8_t> m_sw_buffer;
+            
+            std::deque<uint8_t> m_audio_queue;
+            std::mutex m_audio_mutex;
+            
+            std::atomic<bool> m_events_available;
+            std::atomic<bool> m_redraw_needed;
+            std::atomic<bool> m_is_loading;
+            bool m_auto_obs_fps = false;
+        
+            // Activation behaviors
+                bool m_restart_on_activate = false;
+                bool m_play_on_activate = true;
+                bool m_pause_on_deactivate = true;
+                bool m_downmix_to_stereo = false;
+            
+                // Hotkeys    obs_hotkey_id m_hotkey_play;
+    obs_hotkey_id m_hotkey_pause;
+    obs_hotkey_id m_hotkey_stop;
+    obs_hotkey_id m_hotkey_next;
+    obs_hotkey_id m_hotkey_prev;
+    static void on_hotkey(void *data, obs_hotkey_id id, obs_hotkey_t *key, bool pressed);
 
     // Audio via FIFO
     std::string m_fifo_path;
